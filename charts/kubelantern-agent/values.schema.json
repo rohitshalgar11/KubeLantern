@@ -90,7 +90,7 @@
         "existingSecret": { "type": "string" },
         "channels": {
           "type": "array", "minItems": 1, "uniqueItems": true,
-          "items": { "enum": ["teams", "slack", "webhook"] }
+          "items": { "enum": ["teams", "slack", "webhook", "email"] }
         },
         "events": {
           "type": "array", "minItems": 1, "uniqueItems": true,
@@ -98,7 +98,18 @@
         },
         "detail": { "enum": ["summary", "full"] },
         "maxPerMinute": { "type": "integer", "minimum": 1, "maximum": 600 },
-        "allowHttp": { "type": "boolean" },
+        "allowInsecure": { "type": "boolean" },
+        "email": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "to": { "type": "array", "items": { "type": "string", "pattern": "^[^@\\s]+@[^@\\s]+$" } },
+            "from": { "type": "string" },
+            "smtpHost": { "type": "string" },
+            "smtpPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "tls": { "enum": ["starttls", "ssl", "none"] }
+          }
+        },
         "egressCidrs": { "type": "array", "items": { "type": "string" } },
         "resources": { "type": "object" }
       }

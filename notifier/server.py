@@ -17,6 +17,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from notifier import CHANNELS, KINDS
+from notifier.mail import EmailConfig
 from notifier.sender import Sender
 
 log = logging.getLogger("kubelantern.notifier")
@@ -95,12 +96,23 @@ def main() -> None:
     unknown = [c for c in channels if c not in CHANNELS]
     if unknown:
         log.error("unknown channel(s) %s; supported: %s", unknown, ", ".join(CHANNELS))
+    env = os.environ.get
+    email = None
+    if "email" in channels:
+        email = EmailConfig(
+            host=env("KUBELANTERN_NOTIFY_EMAIL_HOST", ""),
+            port=int(env("KUBELANTERN_NOTIFY_EMAIL_PORT", "587")),
+            sender=env("KUBELANTERN_NOTIFY_EMAIL_FROM", ""),
+            to=[t.strip() for t in env("KUBELANTERN_NOTIFY_EMAIL_TO", "").split(",") if t.strip()],
+            tls=env("KUBELANTERN_NOTIFY_EMAIL_TLS", "starttls"),
+        )
     sender = Sender(
         os.environ.get("KUBELANTERN_NOTIFY_SECRET_DIR", "/etc/kubelantern/notify"),
         channels,
         detail=os.environ.get("KUBELANTERN_NOTIFY_DETAIL", "summary"),
-        allow_http=os.environ.get("KUBELANTERN_NOTIFY_ALLOW_HTTP", "false").lower() == "true",
+        allow_insecure=os.environ.get("KUBELANTERN_NOTIFY_ALLOW_INSECURE", "false").lower() == "true",
         max_per_minute=int(os.environ.get("KUBELANTERN_NOTIFY_MAX_PER_MINUTE", "20")),
+        email=email,
     )
     q: queue.Queue = queue.Queue(maxsize=200)
     threading.Thread(target=run_worker, args=(q, sender), name="notify", daemon=True).start()

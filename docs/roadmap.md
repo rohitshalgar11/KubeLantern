@@ -39,8 +39,9 @@ Done:
 ## Stage 9 — Notifications
 
 Built ([docs](notifications.md)):
-- Microsoft Teams (Workflows webhook, Adaptive Card), Slack (incoming webhook)
-  and a generic JSON webhook, configured per namespace.
+- Microsoft Teams (Workflows webhook, Adaptive Card), email (e.g. a Teams
+  channel's email address, any SMTP service), Slack (incoming webhook) and a
+  generic JSON webhook, configured per namespace.
 - Default: one message when the diagnosis is ready, one when resolved; other
   events optional. Restored incidents don't re-notify.
 - Webhook URLs in a Secret the team creates with its usual tool; mounted only

@@ -25,7 +25,11 @@ runbooks:
 notifications:
   enabled: true
   existingSecret: demo-notify
-  channels: ["teams", "slack", "webhook"]
+  channels: ["teams", "slack", "webhook", "email"]
+  email:
+    to: ["a1b2c3d4.example.onmicrosoft.com@emea.teams.ms"]
+    from: kubelantern@example.com
+    smtpHost: smtp.azurecomm.net
   events: ["opened", "diagnosis", "resolved"]
   detail: full
   egressCidrs: ["52.0.0.0/8"]

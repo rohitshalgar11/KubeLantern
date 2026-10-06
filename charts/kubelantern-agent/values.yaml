@@ -69,15 +69,24 @@ runbooks:
 # Off by default: a chat message leaves the cluster.
 notifications:
   enabled: false
-  # Secret in THIS namespace holding the webhook URLs, one key per channel:
-  #   teams   = Teams Workflows URL ("Post to a channel when a webhook request is received")
-  #   slack   = Slack incoming-webhook URL
-  #   webhook = any HTTPS endpoint receiving KubeLantern JSON
+  # Secret in THIS namespace holding the credentials, one key per item:
+  #   teams         = Teams Workflows URL ("Post to a channel when a webhook request is received")
+  #   slack         = Slack incoming-webhook URL
+  #   webhook       = any HTTPS endpoint receiving KubeLantern JSON
+  #   smtp-username / smtp-password = SMTP login for the email channel (optional for relays)
   # Create it with your usual tool (External Secrets, Sealed Secrets, kubectl...).
   # It is mounted only into the notifier container; the agent never sees it.
   existingSecret: kubelantern-notify
-  # Which keys of the Secret to use.
+  # Where to post: teams | slack | webhook | email
   channels: ["teams"]
+  # Email channel, e.g. to a Microsoft Teams channel's email address
+  # (Teams: channel ⋯ > Get email address). Any SMTP service works.
+  email:
+    to: []                 # e.g. ["a1b2c3d4.yourtenant.onmicrosoft.com@emea.teams.ms"]
+    from: ""               # sender address your SMTP service may send as
+    smtpHost: ""           # e.g. smtp.azurecomm.net, your relay, smtp.sendgrid.net
+    smtpPort: 587
+    tls: starttls          # starttls (587) | ssl (465) | none (testing only)
   # When to post. diagnosis = when the cause is known (includes "diagnosis
   # unavailable" if the AI fails); resolved = when it's over. Also available:
   # opened, cause_changed, scope_changed, ongoing. Without AI (gateway.url empty),
@@ -88,9 +97,10 @@ notifications:
   detail: summary
   # Upper limit of messages per minute from this namespace.
   maxPerMinute: 20
-  # Allow http:// URLs (testing only; real webhooks are https).
-  allowHttp: false
-  # With networkPolicy.egress.enabled: where the notifier may connect on 443.
+  # Allow http:// webhooks and SMTP without TLS (testing only).
+  allowInsecure: false
+  # With networkPolicy.egress.enabled: where the notifier may connect on 443
+  # (and on email.smtpPort when the email channel is on).
   # Empty = any destination. (NetworkPolicy applies to the whole pod.)
   egressCidrs: []
   resources:

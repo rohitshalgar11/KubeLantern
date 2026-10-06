@@ -4,7 +4,7 @@
 # Points the demo agent's notifier at an in-cluster webhook sink, then checks:
 #   1. the agent container cannot read the webhook Secret (only the notifier can)
 #   2. a crash-looping workload produces a Teams card with the diagnosis
-#   3. Slack and generic webhook payloads arrive too
+#   3. Slack, generic webhook and email (Teams channel address) arrive too
 #   4. fixing the workload produces a "resolved" card
 #
 # Usage: tests/notify/verify-notify.sh [namespace]   (default: demo)
@@ -24,8 +24,11 @@ kubectl -n "$NS" create secret generic kubelantern-notify \
   --from-literal=teams="$SINK/teams" --from-literal=slack="$SINK/slack" \
   --from-literal=webhook="$SINK/webhook" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 helm upgrade kubelantern-agent charts/kubelantern-agent -n "$NS" --reuse-values \
-  --set notifications.enabled=true --set notifications.allowHttp=true \
-  --set 'notifications.channels={teams,slack,webhook}' --wait --timeout 120s >/dev/null
+  --set notifications.enabled=true --set notifications.allowInsecure=true \
+  --set 'notifications.channels={teams,slack,webhook,email}' \
+  --set notifications.email.smtpHost=webhook-sink.kubelantern-test.svc --set notifications.email.smtpPort=2525 \
+  --set notifications.email.tls=none --set notifications.email.from=kubelantern@example.com \
+  --set 'notifications.email.to={channel.test@emea.teams.ms}' --wait --timeout 120s >/dev/null
 kubectl delete -f tests/crashloop/ --ignore-not-found >/dev/null
 kubectl -n kubelantern-test rollout restart deploy/webhook-sink >/dev/null   # clear old output
 kubectl -n kubelantern-test rollout status deploy/webhook-sink --timeout=120s >/dev/null
@@ -46,6 +49,9 @@ if sink_log | grep -A1 "=== POST /teams" | grep -q "dependency"; then pass "card
 echo "== 3. other channels =="
 if sink_log | grep -q "=== POST /slack"; then pass "Slack payload delivered"; else fail "no Slack payload"; fi
 if sink_log | grep -A1 "=== POST /webhook" | grep -q '"source": "kubelantern"'; then pass "generic webhook JSON delivered"; else fail "no generic webhook JSON"; fi
+# (long Subject headers are folded onto the next line, so match the text alone)
+if sink_log | grep -A12 "=== EMAIL" | grep -q "\[KubeLantern\] Incident diagnosed"; then pass "email delivered (subject: [KubeLantern] Incident diagnosed…)"; else fail "no diagnosis email"; fi
+if sink_log | grep -A12 "=== EMAIL" | grep -q "To: channel.test@emea.teams.ms"; then pass "email addressed to the channel address"; else fail "email not addressed to the channel"; fi
 
 echo "== 4. resolved card =="
 kubectl -n "$NS" patch deploy/broken-app --type=json \

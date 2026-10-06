@@ -15,17 +15,15 @@ import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
-from notifier.formats import FORMATS
+from notifier.formats import FORMATS, email_message
+from notifier.mail import EmailConfig, build_message, smtp_send
+from notifier.sender_errors import SendError
 
 log = logging.getLogger("kubelantern.notifier")
 
 RETRYABLE = {408, 425, 429, 500, 502, 503, 504}
 
 
-class SendError(Exception):
-    def __init__(self, message: str, status: int | None = None, retry_after: float | None = None):
-        super().__init__(message)
-        self.status, self.retry_after = status, retry_after
 
 
 def http_post(url: str, payload: dict, timeout: float = 10) -> int:
@@ -50,14 +48,18 @@ def http_post(url: str, payload: dict, timeout: float = 10) -> int:
 
 class Sender:
     def __init__(self, secret_dir: str | Path, channels: list[str], detail: str = "summary",
-                 allow_http: bool = False, max_per_minute: int = 20, retries: int = 3,
+                 allow_insecure: bool = False, max_per_minute: int = 20, retries: int = 3,
+                 email: EmailConfig | None = None,
                  post: Callable[[str, dict], int] = http_post,
+                 mail: Callable = smtp_send,
                  sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic) -> None:
         self.secret_dir = Path(secret_dir)
-        self.channels = [c for c in channels if c in FORMATS]
+        self.channels = [c for c in channels if c in FORMATS or c == "email"]
+        self.email = email
+        self.mail = mail
         self.detail = detail
-        self.allow_http = allow_http
+        self.allow_insecure = allow_insecure
         self.max_per_minute = max_per_minute
         self.retries = retries
         self.post, self.sleep, self.clock = post, sleep, clock
@@ -76,7 +78,7 @@ class Sender:
                             channel, channel)
                 self._warned.add(channel)
             return None
-        if not (url.startswith("https://") or (self.allow_http and url.startswith("http://"))):
+        if not (url.startswith("https://") or (self.allow_insecure and url.startswith("http://"))):
             log.error("refusing to send to channel %s: URL must use https", channel)
             return None
         self._warned.discard(channel)
@@ -100,6 +102,9 @@ class Sender:
             return {c: "rate-limited" for c in self.channels}
         results = {}
         for channel in self.channels:
+            if channel == "email":
+                results[channel] = self._deliver_email(event)
+                continue
             url = self._url(channel)
             if url is None:
                 results[channel] = "not-configured"
@@ -108,12 +113,39 @@ class Sender:
             results[channel] = self._deliver(channel, url, payload, event["kind"], inc_id)
         return results
 
+    def _secret(self, key: str) -> str | None:
+        try:
+            return (self.secret_dir / key).read_text().strip() or None
+        except OSError:
+            return None
+
+    def _deliver_email(self, event: dict) -> str:
+        cfg = self.email
+        problem = cfg.problem() if cfg else "email settings missing"
+        if problem:
+            if "email" not in self._warned:
+                log.error("email channel not configured: %s", problem)
+                self._warned.add("email")
+            return "not-configured"
+        if cfg.tls == "none" and not self.allow_insecure:
+            log.error("refusing to send email without TLS (tls: none is for testing only)")
+            return "not-configured"
+        subject, text, html = email_message(event, self.detail)
+        msg = build_message(cfg, subject, text, html)
+        user, password = self._secret("smtp-username"), self._secret("smtp-password")
+        return self._retry("email", lambda: self.mail(cfg, msg, user, password),
+                           event["kind"], event["incident"].get("id"))
+
     def _deliver(self, channel, url, payload, kind, inc_id) -> str:
+        return self._retry(channel, lambda: self.post(url, payload), kind, inc_id)
+
+    def _retry(self, channel, attempt_fn, kind, inc_id) -> str:
         delay = 2.0
         for attempt in range(1, self.retries + 1):
             try:
-                status = self.post(url, payload)
-                log.info("sent %s for %s to %s (HTTP %s)", kind, inc_id, channel, status)
+                status = attempt_fn()
+                log.info("sent %s for %s to %s%s", kind, inc_id, channel,
+                         f" (HTTP {status})" if isinstance(status, int) else "")
                 return "sent"
             except SendError as e:
                 retryable = e.status is None or e.status in RETRYABLE

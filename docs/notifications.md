@@ -1,4 +1,4 @@
-# Notifications — Microsoft Teams, Slack, webhook
+# Notifications — Microsoft Teams, email, Slack, webhook
 
 KubeLantern can post each incident to the owning team's channel: one message
 when the diagnosis is ready, one when the incident is resolved. It's off by
@@ -9,13 +9,14 @@ and nobody else's incidents.
 flowchart LR
     subgraph pod["agent pod (team namespace)"]
         agent["agent container<br/><small>Kubernetes API token<br/>no webhook URLs</small>"]
-        notifier["notifier container<br/><small>webhook URLs (Secret)<br/>no API token · 127.0.0.1 only</small>"]
+        notifier["notifier container<br/><small>webhook URLs, SMTP login (Secret)<br/>no API token · 127.0.0.1 only</small>"]
         agent -- "event (localhost)" --> notifier
     end
     secret[("Secret<br/>kubelantern-notify")] -. mounted only here .-> notifier
     notifier -- HTTPS --> teams["Teams channel<br/><small>Workflows webhook</small>"]
     notifier -- HTTPS --> slack["Slack"]
     notifier -- HTTPS --> hook["your webhook"]
+    notifier -- "SMTP (TLS)" --> mail["email<br/><small>e.g. a Teams channel address</small>"]
 ```
 
 ## What is sent, and when
@@ -108,6 +109,66 @@ Workflows webhooks.
 
 ---
 
+## Email — e.g. a Teams channel's email address
+
+Use this when you can't create a Workflows webhook (some organisations block
+Workflows/Power Automate), or when you want plain email. KubeLantern sends an
+HTML email, and Teams posts it in the channel as a message.
+
+### 1. Get the channel's email address and let KubeLantern's sender in
+
+1. In Teams, open the channel → **⋯ (More options)** → **Get email address**.
+   It looks like `a1b2c3d4.yourtenant.onmicrosoft.com@emea.teams.ms`.
+2. Click **Advanced settings** and choose who may send to it:
+   - **Only email sent from these domains**: add your sending domain (best), or
+   - **Anyone can send emails to this address**.
+
+   By default only team members can send, so mail from a service address is
+   silently dropped.
+
+### 2. Pick an SMTP service
+
+Any SMTP service your cluster can reach works. TLS is required (STARTTLS on 587
+or SSL on 465).
+
+| Service | `smtpHost` | `smtpPort` / `tls` | Credentials |
+|---|---|---|---|
+| Azure Communication Services Email | `smtp.azurecomm.net` | `587` / `starttls` | an *SMTP Username* created on the ACS resource (linked to an Entra app with the *Communication and Email Service Owner* role) + that app's client secret ([Microsoft docs](https://learn.microsoft.com/azure/communication-services/quickstarts/email/send-email-smtp/smtp-authentication)) |
+| Your company's mail relay | relay host name | usually `587` or `25` / `starttls` | often none (relays allow trusted networks); leave the keys out |
+| SendGrid | `smtp.sendgrid.net` | `587` / `starttls` | username `apikey`, password = API key |
+| Microsoft 365 SMTP AUTH | `smtp.office365.com` | `587` / `starttls` | a mailbox login; many tenants disable SMTP AUTH, so ask your admin first |
+
+The `from` address must be one your SMTP service is allowed to send as (for
+ACS: a verified sender on its domain).
+
+### 3. Credentials into the Secret, settings into values
+
+```bash
+kubectl -n payments create secret generic kubelantern-notify \
+  --from-literal=smtp-username='…' --from-literal=smtp-password='…'
+```
+
+```yaml
+notifications:
+  enabled: true
+  channels: ["email"]                 # or ["teams", "email"] for both
+  email:
+    to: ["a1b2c3d4.yourtenant.onmicrosoft.com@emea.teams.ms"]
+    from: "kubelantern@yourdomain.com"
+    smtpHost: smtp.azurecomm.net
+    smtpPort: 587
+    tls: starttls
+```
+
+The subject is the incident, e.g.
+`[KubeLantern] Incident diagnosed: Deployment/api in payments (dependency)`,
+and the body has the same facts, cause, next steps and escalation as the Teams
+card. The SMTP login sits in the same Secret as the webhook URLs, and only the
+notifier container can read it.
+
+With default-deny egress, the chart also opens `smtpPort` for the pod (limited
+to `egressCidrs` if set).
+
 ## Slack
 
 1. Create a Slack app with **Incoming Webhooks** enabled and add a webhook to
@@ -194,11 +255,11 @@ picked up without restarting anything.
 
 | Concern | How it's handled |
 |---|---|
-| Who can read the webhook URL | only the **notifier** container (the Secret is mounted only there). The agent container doesn't have it, and the ServiceAccount has no Secret permission at all |
+| Who can read the webhook URLs / SMTP login | only the **notifier** container (the Secret is mounted only there). The agent container doesn't have it, and the ServiceAccount has no Secret permission at all |
 | Who can use the Kubernetes API | only the **agent** container (its token is mounted only there) |
 | Who can trigger a message | only the agent: the notifier listens on `127.0.0.1` inside the pod |
 | Data leaving the cluster | off by default; `summary` detail by default (no logs); redacted in the agent and again in the notifier |
-| Plain HTTP | refused (`allowHttp` exists for local testing only) |
+| Plain HTTP / SMTP without TLS | refused (`allowInsecure` exists for local testing only) |
 | Floods | at most `maxPerMinute` messages per namespace (default 20); one incident = two messages |
 | Delivery problems | retries on 429/5xx with the server's `Retry-After`; never blocks the agent; URLs never logged |
 
@@ -223,11 +284,12 @@ the pod, limited to `notifications.egressCidrs` if set.
 make test-notify NS=demo
 ```
 
-This deploys a test receiver in `kubelantern-test`, points the `demo`
-notifier at it, triggers a crash loop and checks:
+This deploys a test receiver in `kubelantern-test` (HTTP and SMTP), points the
+`demo` notifier at it, triggers a crash loop and checks:
 - the agent can't read the URL
 - the notifier has no API token
 - a Teams Adaptive Card with the diagnosis arrives, plus Slack and webhook payloads
+- an email to a Teams-style channel address arrives
 - a "resolved" card arrives
 
 It prints the card JSON at the end.
@@ -252,3 +314,8 @@ kubectl -n payments logs deploy/kubelantern-agent -c notifier
 | `failed: HTTP 400` | the Workflow rejected the payload: make sure you used the template above |
 | `failed: unreachable` | egress blocked: see "With default-deny egress" |
 | `rate limit … dropped` | more than `maxPerMinute` messages in a minute |
+| `email channel not configured: …` | an `email.*` value is missing or invalid |
+| `refusing to send email without TLS` | `email.tls: none` outside testing |
+| `failed: SMTP refused: SMTPAuthenticationError` | wrong `smtp-username` / `smtp-password` |
+| `failed: SMTP refused: SMTPSenderRefused` | the SMTP service may not send as `email.from` |
+| `sent diagnosis … to email` but nothing in Teams | the channel only accepts mail from members: see email step 1 |

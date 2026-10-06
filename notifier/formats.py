@@ -20,6 +20,7 @@ again here before it leaves the cluster.
 
 from __future__ import annotations
 
+import html as _html
 import time
 from typing import Any
 
@@ -226,6 +227,59 @@ def webhook(event: dict, detail: str = "summary") -> dict:
         "error": s["error"],
         "evidence": s["evidence"] or None,
     }
+
+
+# -- email (e.g. a Microsoft Teams channel's email address) ------------------------
+
+EMAIL_COLOR = {"resolved": "#2e7d32", "ongoing": "#b26a00", "scope_changed": "#b26a00"}
+
+
+def email_message(event: dict, detail: str = "summary") -> tuple[str, str, str]:
+    """Return (subject, plain text, HTML)."""
+    s = sections(event, detail)
+    d = event.get("diagnosis") or {}
+    subject = "[KubeLantern] " + title(event)
+    if d.get("category"):
+        subject += f" ({d['category']})"
+    e = _html.escape
+
+    text = [title(event), ""] + [f"{k}: {v}" for k, v in facts(event)]
+    parts = [
+        (f'<h3 style="color:{EMAIL_COLOR.get(event["kind"], "#c62828")};margin:0 0 8px">'
+         f"{e(title(event))}</h3>"),
+        '<table style="border-collapse:collapse;font-size:14px">'
+        + "".join(f'<tr><td style="padding:2px 12px 2px 0;color:#555"><b>{e(k)}</b></td>'
+                  f"<td style=\"padding:2px 0\">{e(v)}</td></tr>" for k, v in facts(event))
+        + "</table>",
+    ]
+
+    def add(heading: str, body: str, pre: bool = False):
+        text.extend(["", f"{heading}:", body])
+        inner = (f'<pre style="font-size:12px;white-space:pre-wrap">{e(body)}</pre>' if pre
+                 else f"<p style=\"margin:4px 0\">{e(body).replace(chr(10), '<br>')}</p>")
+        parts.append(f'<p style="margin:12px 0 0"><b>{e(heading)}</b></p>{inner}')
+
+    if s["summary"]:
+        add("Summary", s["summary"])
+    if s["cause"]:
+        add("Probable cause", s["cause"])
+    if s["steps"]:
+        add("Next steps", "\n".join(f"{i}. {x}" for i, x in enumerate(s["steps"], 1)))
+    if s["fix"]:
+        add("Suggested fix", s["fix"])
+    if s["escalation"]:
+        add("Escalate", s["escalation"])
+    if s["error"]:
+        add("Diagnosis unavailable", s["error"])
+    if s["runbooks"]:
+        add("Runbooks", ", ".join(s["runbooks"]))
+    if s["evidence"]:
+        add("Evidence", "\n".join(s["evidence"]), pre=True)
+    footer = "Sent by KubeLantern · " + time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
+    text.extend(["", footer])
+    parts.append(f'<p style="margin:16px 0 0;color:#888;font-size:12px">{e(footer)}</p>')
+    html = '<div style="font-family:Segoe UI,Arial,sans-serif">' + "".join(parts) + "</div>"
+    return subject, "\n".join(text), html
 
 
 FORMATS = {"teams": teams, "slack": slack, "webhook": webhook}

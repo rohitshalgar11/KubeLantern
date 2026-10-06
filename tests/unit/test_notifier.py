@@ -124,7 +124,7 @@ def test_sends_to_every_configured_channel(tmp_path):
 def test_http_urls_are_refused_unless_allowed(tmp_path):
     s, _ = _sender(tmp_path, lambda u, p: 200, urls={"teams": "http://sink:8080/t"})
     assert s.send(EVENT) == {"teams": "not-configured"}
-    s.allow_http = True
+    s.allow_insecure = True
     assert s.send(EVENT) == {"teams": "sent"}
 
 
@@ -267,3 +267,97 @@ def test_unreachable_sidecar_never_blocks_or_raises():
                           sleep=lambda s: None)
     client.notify("resolved", INCIDENT)
     client.flush()                                    # logs and drops; no exception
+
+
+# -- email channel (e.g. a Teams channel's email address) -----------------------------------
+
+from notifier.mail import EmailConfig, build_message, smtp_send
+
+CFG = EmailConfig(host="smtp.example.com", port=587, sender="kubelantern@example.com",
+                  to=["abc123.tenant.onmicrosoft.com@emea.teams.ms"])
+
+
+def test_email_message_has_subject_text_and_html():
+    subject, text, html = formats.email_message(EVENT)
+    assert subject == "[KubeLantern] Incident diagnosed: Deployment/api in payments (dependency)"
+    assert "Service 'db' not found" in text and "<table" in html
+    assert "hunter2" not in text + html                 # redacted
+    msg = build_message(CFG, subject, text, html)
+    assert msg["To"] == CFG.to[0] and msg.is_multipart()
+
+
+def test_email_html_is_escaped():
+    ev = {**EVENT, "diagnosis": {**DIAG, "summary": "<script>alert(1)</script>"}}
+    _, _, html = formats.email_message(ev)
+    assert "<script>" not in html and "&lt;script&gt;" in html
+
+
+def test_email_config_problems_are_reported():
+    assert EmailConfig(host="").problem()
+    assert EmailConfig(host="h", sender="nope", to=["a@b"]).problem()
+    assert EmailConfig(host="h", sender="a@b", to=[]).problem()
+    assert EmailConfig(host="h", sender="a@b", to=["c@d"], tls="plain").problem()
+    assert CFG.problem() is None
+
+
+def _email_sender(tmp_path, mail, **kw):
+    (tmp_path / "smtp-username").write_text("user\n")
+    (tmp_path / "smtp-password").write_text("s3cret\n")
+    return Sender(tmp_path, ["email"], email=kw.pop("email", CFG), mail=mail,
+                  sleep=lambda s: None, **kw)
+
+
+def test_email_is_sent_with_credentials_from_the_secret(tmp_path):
+    got = []
+    s = _email_sender(tmp_path, lambda cfg, msg, u, p: got.append((msg["Subject"], u, p)))
+    assert s.send(EVENT) == {"email": "sent"}
+    assert got == [("[KubeLantern] Incident diagnosed: Deployment/api in payments (dependency)",
+                    "user", "s3cret")]
+
+
+def test_email_without_tls_is_refused_unless_insecure_allowed(tmp_path):
+    plain = EmailConfig(host="sink", port=2525, sender="a@b.c", to=["x@y.z"], tls="none")
+    s = _email_sender(tmp_path, lambda *a: None, email=plain)
+    assert s.send(EVENT) == {"email": "not-configured"}
+    s.allow_insecure = True
+    assert s.send(EVENT) == {"email": "sent"}
+
+
+def test_email_auth_failure_is_not_retried(tmp_path):
+    calls = []
+
+    def mail(*a):
+        calls.append(1)
+        raise SendError("SMTP refused", status=400)
+
+    assert _email_sender(tmp_path, mail).send(EVENT) == {"email": "failed"} and len(calls) == 1
+
+
+def test_smtp_send_uses_starttls_and_login():
+    log = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            log.append(("connect", host, port))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            log.append(("quit",))
+
+        def ehlo(self):
+            log.append(("ehlo",))
+
+        def starttls(self, context):
+            log.append(("starttls",))
+
+        def login(self, u, p):
+            log.append(("login", u))
+
+        def send_message(self, msg):
+            log.append(("send", msg["To"]))
+
+    smtp_send(CFG, build_message(CFG, "s", "t", "<p>h</p>"), "user", "pw", smtp_factory=FakeSMTP)
+    steps = [x[0] for x in log]
+    assert steps == ["connect", "ehlo", "starttls", "ehlo", "login", "send", "quit"]

@@ -53,10 +53,14 @@ spec:
         - port: {{ .Values.gateway.port }}
           protocol: TCP
     {{- if .Values.notifications.enabled }}
-    # Notifier -> Teams / Slack / webhook (HTTPS)
+    # Notifier -> Teams / Slack / webhook (HTTPS) and SMTP for the email channel
     - ports:
         - port: 443
           protocol: TCP
+        {{- if has "email" .Values.notifications.channels }}
+        - port: {{ .Values.notifications.email.smtpPort }}
+          protocol: TCP
+        {{- end }}
       {{- with .Values.notifications.egressCidrs }}
       to:
         {{- range . }}

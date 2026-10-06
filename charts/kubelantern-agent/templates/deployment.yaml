@@ -115,10 +115,23 @@ spec:
               value: {{ .Values.notifications.detail | quote }}
             - name: KUBELANTERN_NOTIFY_MAX_PER_MINUTE
               value: {{ .Values.notifications.maxPerMinute | quote }}
-            - name: KUBELANTERN_NOTIFY_ALLOW_HTTP
-              value: {{ .Values.notifications.allowHttp | toString | quote }}
+            - name: KUBELANTERN_NOTIFY_ALLOW_INSECURE
+              value: {{ .Values.notifications.allowInsecure | toString | quote }}
             - name: KUBELANTERN_NOTIFY_SECRET_DIR
               value: /etc/kubelantern/notify
+            {{- if has "email" .Values.notifications.channels }}
+            {{- $email := .Values.notifications.email }}
+            - name: KUBELANTERN_NOTIFY_EMAIL_HOST
+              value: {{ required "notifications.email.smtpHost is required for the email channel" $email.smtpHost | quote }}
+            - name: KUBELANTERN_NOTIFY_EMAIL_PORT
+              value: {{ $email.smtpPort | quote }}
+            - name: KUBELANTERN_NOTIFY_EMAIL_FROM
+              value: {{ required "notifications.email.from is required for the email channel" $email.from | quote }}
+            - name: KUBELANTERN_NOTIFY_EMAIL_TO
+              value: {{ required "notifications.email.to is required for the email channel" (join "," $email.to) | quote }}
+            - name: KUBELANTERN_NOTIFY_EMAIL_TLS
+              value: {{ $email.tls | quote }}
+            {{- end }}
           resources:
             {{- toYaml .Values.notifications.resources | nindent 12 }}
           securityContext:

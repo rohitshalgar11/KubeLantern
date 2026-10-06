@@ -188,7 +188,7 @@ your charts, with optional egress rules for default-deny-egress namespaces:
 
 | Check | What it proves | Result |
 |---|---|---|
-| `make test` | 196 unit tests, incl. an RBAC policy guard on the chart and an adversarial model | ✅ |
+| `make test` | 203 unit tests, incl. an RBAC policy guard on the chart and an adversarial model | ✅ |
 | `make chart-lint` + CI | both charts lint, render and pass Kubernetes schema validation; an agent under default-deny egress still opens incidents | ✅ in CI |
 | `make test-rbac` | payments agent gets 403 on orders, Secrets, cluster scope; may write only its own incidents | 83 checks ✅ |
 | `make test-incidents` | an incident survives an agent restart (same ID, no re-diagnosis) and resolves | 7/7 ✅ |
@@ -209,7 +209,7 @@ your charts, with optional egress rules for default-deny-egress namespaces:
 | [Runbooks](docs/runbooks.md) | writing team runbooks, onboarding, isolation |
 | [Comparison](docs/comparison.md) | KubeLantern vs K8sGPT, HolmesGPT, kagent |
 | [Build journey](docs/journey.md) | the ten stages, and what went wrong along the way |
-| [Notifications](docs/notifications.md) | Microsoft Teams (Workflows), Slack, webhook; per-namespace, Secret isolation |
+| [Notifications](docs/notifications.md) | Microsoft Teams (Workflows or channel email), Slack, webhook; per-namespace, Secret isolation |
 | [Roadmap](docs/roadmap.md) | production hardening |
 
 ## Status
@@ -224,7 +224,7 @@ your charts, with optional egress rules for default-deny-egress namespaces:
 | 6 | LangGraph diagnosis | ✅ |
 | 7 | Runbooks / RAG | ✅ |
 | 8 | Helm charts + GitOps (ArgoCD) · incident persistence | ✅ |
-| 9 | Notifications: Microsoft Teams, Slack, webhook | built, live test pending |
+| 9 | Notifications: Microsoft Teams, email, Slack, webhook | built, live test pending |
 | 10 | Production hardening | planned |
 
 KubeLantern is **alpha**: tested on kind, not yet production-hardened.

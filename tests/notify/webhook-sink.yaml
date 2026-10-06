@@ -27,7 +27,7 @@ spec:
           command: ["python", "-c"]
           args:
             - |
-              import json, sys
+              import socketserver, threading
               from http.server import BaseHTTPRequestHandler, HTTPServer
               class H(BaseHTTPRequestHandler):
                   def log_message(self, *a): pass
@@ -36,9 +36,30 @@ spec:
                       print(f"=== POST {self.path}", flush=True)
                       print(body.decode(), flush=True)
                       self.send_response(200); self.end_headers(); self.wfile.write(b"1")
+              class Smtp(socketserver.StreamRequestHandler):
+                  # Minimal SMTP receiver (no TLS, no auth) for the email channel test.
+                  def reply(self, line): self.wfile.write((line + "\r\n").encode())
+                  def handle(self):
+                      self.reply("220 sink")
+                      while True:
+                          line = self.rfile.readline().decode(errors="replace").strip()
+                          cmd = line[:4].upper()
+                          if not line or cmd == "QUIT": self.reply("221 bye"); return
+                          if cmd == "DATA":
+                              self.reply("354 go"); lines = []
+                              while True:
+                                  l = self.rfile.readline().decode(errors="replace").rstrip("\r\n")
+                                  if l == ".": break
+                                  lines.append(l)
+                              print("=== EMAIL", flush=True); print("\n".join(lines), flush=True)
+                              self.reply("250 queued")
+                          else:
+                              self.reply("250 ok")
+              threading.Thread(target=socketserver.ThreadingTCPServer(("0.0.0.0", 2525), Smtp).serve_forever, daemon=True).start()
               HTTPServer(("0.0.0.0", 8080), H).serve_forever()
           ports:
             - containerPort: 8080
+            - containerPort: 2525
 ---
 apiVersion: v1
 kind: Service
@@ -48,5 +69,9 @@ metadata:
 spec:
   selector: { app: webhook-sink }
   ports:
-    - port: 8080
+    - name: http
+      port: 8080
       targetPort: 8080
+    - name: smtp
+      port: 2525
+      targetPort: 2525

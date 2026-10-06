@@ -7,4 +7,4 @@ container never sees them, and the ServiceAccount has no Secret access.
 
 KINDS = ("opened", "diagnosis", "diagnosis_failed", "cause_changed", "scope_changed",
          "ongoing", "resolved")
-CHANNELS = ("teams", "slack", "webhook")
+CHANNELS = ("teams", "slack", "webhook", "email")
