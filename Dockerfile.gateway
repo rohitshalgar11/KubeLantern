@@ -1,0 +1,16 @@
+FROM python:3.12-slim AS build
+WORKDIR /src
+COPY pyproject.toml README.md ./
+COPY agent ./agent
+COPY gateway ./gateway
+COPY kubelantern_common ./kubelantern_common
+RUN pip install --no-cache-dir --prefix=/install ".[gateway]"
+
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY --from=build /install /usr/local
+# Shared (platform-owned) runbooks, loaded as namespace "*"
+COPY runbooks/shared /app/runbooks/shared
+RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin kubelantern
+USER 10001
+ENTRYPOINT ["kubelantern-gateway"]

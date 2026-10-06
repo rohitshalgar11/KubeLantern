@@ -1,0 +1,13 @@
+# Exercises every optional template (used by CI: helm lint / template / kubeconform).
+gateway:
+  model: qwen2.5:3b
+  podAnnotations:
+    example.com/owner: platform
+ollama:
+  persistence:
+    storageClass: managed-csi
+networkPolicy:
+  egress:
+    enabled: true
+    apiServer:
+      cidrs: ["10.0.0.1/32"]

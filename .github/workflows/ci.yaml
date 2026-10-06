@@ -1,0 +1,88 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ matrix.python }}" }
+      - uses: azure/setup-helm@v4     # enables the rendered-chart RBAC tests
+      - run: pip install -e '.[dev,gateway]'
+      - run: ruff check .
+      - run: pytest -q
+
+  charts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.22" }
+      - name: Install kubeconform
+        run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
+      - name: helm lint + template
+        run: make chart-lint
+      - name: Validate rendered manifests against the Kubernetes schemas
+        run: |
+          set -euo pipefail
+          for c in charts/kubelantern-agent charts/kubelantern-ai; do
+            for v in "" $c/ci/*.yaml; do
+              echo "== $c ${v:-defaults}"
+              helm template t "$c" -n kubeconform ${v:+-f "$v"} \
+                | "$(go env GOPATH)/bin/kubeconform" -strict -summary \
+                    -kubernetes-version 1.30.0 \
+                    -skip Runbook,CustomResourceDefinition
+            done
+          done
+
+  e2e:
+    needs: [unit, charts]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: kubelantern
+          config: deployments/kind/kind-config.yaml
+      - name: Build and load images
+        run: make load
+      - name: Deploy agents (Helm)
+        run: make deploy-agents
+      - name: RBAC isolation gate
+        run: make test-rbac
+      - name: A crash-looping workload opens an incident
+        run: |
+          make test-crashloop
+          for i in $(seq 1 30); do
+            if kubectl -n demo logs deploy/kubelantern-agent | grep -q "\[INCIDENT OPENED\] demo-broken-app"; then
+              kubectl -n demo logs deploy/kubelantern-agent | tail -30
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "agent did not open an incident"; kubectl -n demo logs deploy/kubelantern-agent; exit 1
+      - name: The agent still works under default-deny egress
+        run: |
+          make clean-failures
+          make egress-lockdown NS=orders
+          sed 's/namespace: demo/namespace: orders/' tests/crashloop/broken-app.yaml | kubectl apply -f -
+          for i in $(seq 1 30); do
+            if kubectl -n orders logs deploy/kubelantern-agent | grep -q "\[INCIDENT OPENED\] orders-broken-app"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "agent could not work under default-deny egress"; kubectl -n orders logs deploy/kubelantern-agent; exit 1

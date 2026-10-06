@@ -1,0 +1,38 @@
+[project]
+name = "kubelantern"
+version = "0.1.0"
+description = "Namespace-Isolated AI SRE for Kubernetes"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "kubernetes>=29.0.0",
+]
+
+[project.optional-dependencies]
+gateway = [
+    "langgraph>=0.2",
+]
+dev = [
+    "pytest>=8.0",
+    "pyyaml>=6.0",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+kubelantern-agent = "agent.main:main"
+kubelantern-gateway = "gateway.server:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["agent*", "gateway*", "kubelantern_common*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

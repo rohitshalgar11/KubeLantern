@@ -1,0 +1,37 @@
+# Alternative to a chart dependency: one agent Application per
+# namespace, generated from a list. Each namespace must also carry the label
+# kubelantern.io/enabled=true (set it where you create namespaces).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kubelantern-agents
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - list:
+        elements:
+          - namespace: payments
+            egress: "true"
+          - namespace: orders
+            egress: "true"
+  template:
+    metadata:
+      name: "kubelantern-agent-{{ .namespace }}"
+    spec:
+      project: default
+      source:
+        repoURL: ghcr.io/rohitshalgar11/charts
+        chart: kubelantern-agent
+        targetRevision: 0.2.0
+        helm:
+          parameters:
+            - name: networkPolicy.egress.enabled
+              value: "{{ .egress }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ .namespace }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

@@ -1,0 +1,77 @@
+name: release
+
+# Push a tag like v0.2.0 to publish:
+#   ghcr.io/<owner>/kubelantern-agent:<version>      (container image)
+#   ghcr.io/<owner>/kubelantern-gateway:<version>    (container image)
+#   oci://ghcr.io/<owner>/charts/kubelantern-agent    (Helm chart)
+#   oci://ghcr.io/<owner>/charts/kubelantern-ai (Helm chart)
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version and registry
+        id: meta
+        run: |
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"   # GHCR needs lowercase
+
+      - uses: docker/setup-qemu-action@v3      # arm64 images (Apple Silicon, Graviton, Ampere)
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Agent image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner }}/kubelantern-agent:${{ steps.meta.outputs.version }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/kubelantern-agent:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - name: Gateway image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.gateway
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner }}/kubelantern-gateway:${{ steps.meta.outputs.version }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/kubelantern-gateway:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - uses: azure/setup-helm@v4
+      - name: Package and push charts
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          OWNER: ${{ steps.meta.outputs.owner }}
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          for c in kubelantern-agent kubelantern-ai; do
+            # Point the default images at this repository's GHCR namespace.
+            sed -i "s|ghcr.io/rohitshalgar11/|ghcr.io/${OWNER}/|" "charts/$c/values.yaml"
+            helm package "charts/$c" --version "$VERSION" --app-version "$VERSION" -d dist
+            helm push "dist/$c-$VERSION.tgz" "oci://ghcr.io/${OWNER}/charts"
+          done

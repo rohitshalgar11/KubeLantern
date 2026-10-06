@@ -1,0 +1,127 @@
+{{- if .Values.crds.install }}
+# Incident — what KubeLantern found in a namespace. The definition is
+# cluster-scoped (installed once with this chart); the Incident OBJECTS live in
+# each team's namespace, written only by that namespace's agent.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: incidents.kubelantern.io
+  labels:
+    {{- include "kubelantern-ai.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    {{- if .Values.crds.keep }}
+    helm.sh/resource-policy: keep
+    {{- end }}
+spec:
+  group: kubelantern.io
+  scope: Namespaced
+  names:
+    kind: Incident
+    plural: incidents
+    singular: incident
+    shortNames: ["kli"]
+    categories: ["kubelantern"]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Workload
+          type: string
+          jsonPath: .spec.workload.name
+        - name: Cause
+          type: string
+          jsonPath: .status.cause
+        - name: State
+          type: string
+          jsonPath: .status.state
+        - name: Category
+          type: string
+          jsonPath: .status.diagnosis.category
+        - name: Confidence
+          type: string
+          priority: 1
+          jsonPath: .status.diagnosis.confidence
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: ["spec"]
+          properties:
+            spec:
+              type: object
+              required: ["id", "workload", "container", "openedAt"]
+              properties:
+                id:
+                  type: string
+                  maxLength: 300
+                workload:
+                  type: object
+                  properties:
+                    kind: { type: string }
+                    name: { type: string }
+                container:
+                  type: string
+                openedAt:
+                  type: string
+                  format: date-time
+            status:
+              type: object
+              properties:
+                state:
+                  type: string
+                  enum: ["Open", "Resolved"]
+                cause: { type: string }
+                causeFamily: { type: string }
+                exitCode: { type: integer }
+                causeHistory:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    properties:
+                      cause: { type: string }
+                      at: { type: string, format: date-time }
+                failingPods:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+                    properties:
+                      pod: { type: string }
+                      restarts: { type: integer }
+                affectedPods:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+                    properties:
+                      pod: { type: string }
+                      restarts: { type: integer }
+                peakFailing: { type: integer }
+                observations: { type: integer }
+                lastSeenAt: { type: string, format: date-time }
+                lastNotifiedAt: { type: string, format: date-time }
+                resolvedAt: { type: string, format: date-time }
+                updatedAt: { type: string, format: date-time }
+                diagnosis:
+                  type: object
+                  properties:
+                    category: { type: string }
+                    confidence: { type: string }
+                    summary: { type: string, maxLength: 4000 }
+                    probableCause: { type: string, maxLength: 4000 }
+                    nextSteps:
+                      type: array
+                      maxItems: 10
+                      items: { type: string, maxLength: 1000 }
+                    suggestedFix: { type: string, maxLength: 4000 }
+                    escalation: { type: string, maxLength: 500 }
+                    runbooks:
+                      type: array
+                      items: { type: string }
+                    model: { type: string }
+{{- end }}

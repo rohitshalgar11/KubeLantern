@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kubelantern-agent.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubelantern-agent.labels" . | nindent 4 }}
+spec:
+  replicas: 1          # one watcher per namespace; incidents are per agent
+  strategy:
+    type: Recreate     # never two agents reporting the same incident
+  selector:
+    matchLabels:
+      {{- include "kubelantern-agent.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kubelantern-agent.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "kubelantern-agent.name" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: {{ include "kubelantern-agent.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: KUBELANTERN_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: KUBELANTERN_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            - name: KUBELANTERN_OUTPUT
+              value: {{ .Values.output | quote }}
+            - name: KUBELANTERN_LOG_LINES
+              value: {{ .Values.logLines | quote }}
+            - name: KUBELANTERN_RESOLVE_AFTER_SECONDS
+              value: {{ .Values.incidents.resolveAfterSeconds | quote }}
+            - name: KUBELANTERN_REMINDER_MINUTES
+              value: {{ .Values.incidents.reminderMinutes | quote }}
+            - name: KUBELANTERN_INCIDENT_STORE
+              value: {{ .Values.incidents.persist | toString | quote }}
+            - name: KUBELANTERN_INCIDENT_HISTORY
+              value: {{ .Values.incidents.history | quote }}
+            - name: KUBELANTERN_INCIDENT_RETENTION_DAYS
+              value: {{ .Values.incidents.retentionDays | quote }}
+            - name: KUBELANTERN_GATEWAY_URL
+              value: {{ .Values.gateway.url | quote }}
+            - name: KUBELANTERN_TOKEN_PATH
+              value: /var/run/secrets/kubelantern/token
+            - name: KUBELANTERN_RUNBOOK_SYNC_SECONDS
+              value: {{ .Values.runbooks.syncSeconds | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: gateway-token
+              mountPath: /var/run/secrets/kubelantern
+              readOnly: true
+      volumes:
+        # Short-lived token valid ONLY for the gateway (audience-bound), rotated by
+        # the kubelet. It is useless against the Kubernetes API.
+        - name: gateway-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  audience: {{ .Values.gateway.audience | quote }}
+                  expirationSeconds: {{ .Values.gateway.tokenExpirationSeconds }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

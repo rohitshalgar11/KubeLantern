@@ -1,0 +1,18 @@
+# Demo tenant namespaces. Each gets its own isolated KubeLantern agent.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+  labels: { kubelantern.io/enabled: "true" }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: payments
+  labels: { kubelantern.io/enabled: "true" }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orders
+  labels: { kubelantern.io/enabled: "true" }

@@ -1,0 +1,36 @@
+# Exercises every optional template (used by CI: helm lint / template / kubeconform).
+incidents:
+  resolveAfterSeconds: 120
+  history: 20
+  retentionDays: 7
+  viewers:
+    groups: ["demo-developers"]
+runbooks:
+  items:
+    - name: broken-app-database
+      title: broken-app cannot reach its database
+      category: dependency
+      workloads: ["broken-app"]
+      content: |
+        # Our setup
+        broken-app uses the Service `db` on port 5432.
+
+            kubectl apply -f examples/demo-db.yaml
+
+        # Owner
+        demo team — Slack #demo-team-oncall
+  editors:
+    groups: ["demo-developers"]
+    users: ["alice@example.com"]
+networkPolicy:
+  egress:
+    enabled: true
+    apiServer:
+      cidrs: ["172.18.0.0/16"]
+podAnnotations:
+  example.com/team: demo
+tolerations:
+  - key: dedicated
+    operator: Equal
+    value: platform
+    effect: NoSchedule

@@ -1,0 +1,47 @@
+# KubeLantern platform via ArgoCD (OCI Helm chart from GHCR).
+---
+# Declare GHCR as an OCI Helm repository (once per ArgoCD).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-ghcr-kubelantern
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: kubelantern
+  url: ghcr.io/rohitshalgar11/charts
+  enableOCI: "true"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubelantern-ai
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: ghcr.io/rohitshalgar11/charts
+    chart: kubelantern-ai
+    targetRevision: 0.2.0
+    helm:
+      valuesObject:
+        gateway:
+          model: qwen2.5:1.5b
+        ollama:
+          persistence:
+            size: 8Gi
+        networkPolicy:
+          egress:
+            enabled: true            # if kubelantern-ai is default-deny egress
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kubelantern-ai
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

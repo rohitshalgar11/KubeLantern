@@ -1,0 +1,70 @@
+{{- if .Values.crds.install }}
+# Runbook — team-owned troubleshooting knowledge, stored in the team's namespace.
+# Installed with the platform (cluster-scoped object). No ClusterRole is granted
+# to anyone: teams get a namespaced Role through the agent chart.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: runbooks.kubelantern.io
+  labels:
+    {{- include "kubelantern-ai.labels" . | nindent 4 }}
+  annotations:
+    # ArgoCD: create CRDs before anything that uses them.
+    argocd.argoproj.io/sync-wave: "-1"
+    {{- if .Values.crds.keep }}
+    # Keep every team's Runbooks when the platform release is removed.
+    helm.sh/resource-policy: keep
+    {{- end }}
+spec:
+  group: kubelantern.io
+  scope: Namespaced
+  names:
+    kind: Runbook
+    plural: runbooks
+    singular: runbook
+    shortNames: ["rb"]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Title
+          type: string
+          jsonPath: .spec.title
+        - name: Category
+          type: string
+          jsonPath: .spec.category
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: ["spec"]
+          properties:
+            spec:
+              type: object
+              required: ["title", "content"]
+              properties:
+                title:
+                  type: string
+                  minLength: 3
+                  maxLength: 200
+                category:
+                  type: string
+                  description: Optional hint for retrieval.
+                  enum: [application-error, dependency, configuration, resources, image,
+                         permissions, probe, node, unknown]
+                workloads:
+                  type: array
+                  description: Optional. Only use this runbook for these workload names.
+                  maxItems: 20
+                  items:
+                    type: string
+                    maxLength: 253
+                content:
+                  type: string
+                  description: Markdown. Do not put secrets here.
+                  minLength: 10
+                  maxLength: 16384
+{{- end }}

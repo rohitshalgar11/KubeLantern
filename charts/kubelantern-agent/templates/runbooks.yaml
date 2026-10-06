@@ -1,0 +1,64 @@
+{{- range .Values.runbooks.items }}
+---
+apiVersion: kubelantern.io/v1alpha1
+kind: Runbook
+metadata:
+  name: {{ required "runbooks.items[].name is required" .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "kubelantern-agent.labels" $ | nindent 4 }}
+  annotations:
+    # The Runbook CRD comes from the kubelantern-ai chart (another
+    # ArgoCD app); don't fail the dry run if it is not installed yet.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  title: {{ required "runbooks.items[].title is required" .title | quote }}
+  {{- with .category }}
+  category: {{ . | quote }}
+  {{- end }}
+  {{- with .workloads }}
+  workloads:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  content: |
+    {{- required "runbooks.items[].content is required" .content | nindent 4 }}
+{{- end }}
+{{- $editors := .Values.runbooks.editors }}
+{{- if or $editors.groups $editors.users }}
+---
+# Lets the listed team members manage Runbooks in THIS namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kubelantern-runbook-editor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubelantern-agent.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["kubelantern.io"]
+    resources: ["runbooks"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kubelantern-runbook-editor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubelantern-agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kubelantern-runbook-editor
+subjects:
+  {{- range $editors.groups }}
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: {{ . | quote }}
+  {{- end }}
+  {{- range $editors.users }}
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: {{ . | quote }}
+  {{- end }}
+{{- end }}
