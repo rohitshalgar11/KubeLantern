@@ -121,6 +121,17 @@ Resolved incidents are kept up to `incidents.history` (50) and
 `incidents.retentionDays` (30). Set `incidents.persist=false` to keep them in
 memory only; the agent then writes nothing at all.
 
+## Notifications (Teams, Slack, webhook)
+
+To see the messages without a real Teams channel:
+
+```bash
+make test-notify NS=demo        # test receiver + checks; prints the Teams card JSON
+make notify-off NS=demo
+```
+
+Real Teams setup: [notifications.md](notifications.md).
+
 ## Onboarding a new team namespace
 
 ```bash
@@ -180,6 +191,8 @@ what each one runs. On a real cluster you don't use `make` at all (see
 | `make logs NS=x` | follow an agent |
 | `make incidents NS=x` | list stored incidents |
 | `make ai-status` / `ai-logs` | AI pods and models / gateway audit log |
+| `make notify-sink` / `notify-sink-logs` | test webhook receiver / what it received |
+| `make notify-off NS=x` | turn notifications off for a namespace |
 
 **Failure scenarios**
 
@@ -204,6 +217,7 @@ what each one runs. On a real cluster you don't use `make` at all (see
 | `make test-gateway` | gateway identity, namespace and network checks (8) |
 | `make test-rag` | runbook isolation between namespaces (8) |
 | `make test-incidents` | incidents survive an agent restart, then resolve (7) |
+| `make test-notify` | notifications end to end against a test receiver |
 | `make eval` | diagnosis quality on 9 scenarios |
 | `make run-local NS=x` | run the agent on your machine against the current kubeconfig |
 
@@ -227,6 +241,8 @@ Agent (env on `deploy/kubelantern-agent`):
 | `KUBELANTERN_REMINDER_MINUTES` | 30 | ONGOING reminder interval |
 | `KUBELANTERN_INCIDENT_STORE` | `true` | persist incidents as `Incident` objects |
 | `KUBELANTERN_INCIDENT_HISTORY` / `_RETENTION_DAYS` | 50 / 30 | resolved incidents kept |
+| `KUBELANTERN_NOTIFY_URL` | *(empty = off)* | notifier sidecar (`http://127.0.0.1:8081/v1/notify`) |
+| `KUBELANTERN_NOTIFY_EVENTS` / `_DETAIL` | `diagnosis,resolved` / `summary` | what to post, and how much |
 | `KUBELANTERN_RUNBOOK_SYNC_SECONDS` | 0 = off (chart: 30) | Runbook poll interval |
 | `KUBELANTERN_LOG_LINES` | 5 | log lines shown in output |
 | `KUBELANTERN_OUTPUT` | `text` | `json` prints the full evidence bundle |

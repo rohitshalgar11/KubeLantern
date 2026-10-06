@@ -175,6 +175,36 @@ evidence and received a `dependency / high` diagnosis.
   and the model invented a stack trace. Network timeouts are now a dependency
   signal. Claims not backed by the logs are on the Stage 10 list.
 
+## Stage 8 (part 2) — Incidents that survive restarts
+
+**Built:** an `Incident` CRD (definition in the `kubelantern-ai` chart, objects
+in each team namespace). Agents restore open incidents on start, so a chart
+upgrade no longer re-opens and re-diagnoses everything. The agent's only write
+is its own Incident objects, enforced in CI and live.
+
+**Verified:** `test-rbac` 83/83; `test-incidents` 7/7: the incident was stored,
+the diagnosis attached, and after an agent restart it continued with the same
+ID (no duplicate OPENED, no second diagnosis) and then resolved.
+
+**Lessons**
+
+- Restored incidents can't know which pods are still failing until the watcher
+  reports again. They start "tentatively healthy": still-failing pods re-attach
+  silently, and recovered ones resolve after the normal window.
+- Kubernetes names must be lowercase, so the object is `…-inc251e97` while the
+  ID humans see stays `…-INC251e97`.
+
+## Stage 9 — Notifications
+
+**Built:** Microsoft Teams (Workflows webhook with an Adaptive Card; the old
+connectors were retired in May 2026), Slack and a generic webhook. They're sent
+from a sidecar that alone holds the webhook URLs, while the Kubernetes API token
+is mounted only into the agent container.
+
+**Design choices:** off by default and per namespace; one message when
+diagnosed, one when resolved; summary detail without logs by default, because
+chat leaves the cluster.
+
 ## Results at the end of Stage 7
 
 | Check | Result |

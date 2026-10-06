@@ -5,7 +5,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "kubelantern-agent.labels" . | nindent 4 }}
-automountServiceAccountToken: true
+automountServiceAccountToken: false   # mounted explicitly into the agent container only
 ---
 # Namespaced Role — the agent can read this namespace and nothing else.
 # The rules come from files/role-rules.yaml and are intentionally NOT

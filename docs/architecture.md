@@ -118,6 +118,7 @@ One Deployment per enabled namespace, with a ServiceAccount bound to a
 | `collector/` | Builds an evidence bundle: container state, exit code, image, requests/limits, owner chain, matching Services, events, current + previous logs (redacted). Extracts `host:port` references from logs and checks the referenced Services, ports and ready endpoints **in its own namespace**. |
 | `incident/` | Turns noisy pod states into incidents keyed on *namespace + workload + container*. Emits `OPENED`, `CAUSE CHANGED`, `SCOPE CHANGED`, `ONGOING`, `RESOLVED`. Persists them as `Incident` objects in the namespace, so they survive agent restarts (same ID, no re-diagnosis). |
 | `diagnosis/` | Sends `OPENED`/`CAUSE CHANGED` incidents to the gateway from a background worker with retry/backoff; syncs the namespace's `Runbook` objects to the gateway. |
+| `notify.py` + `notifier/` (sidecar) | Optional: posts diagnosed and resolved incidents to Microsoft Teams, Slack or a webhook. The sidecar alone holds the webhook URLs ([notifications.md](notifications.md)). |
 
 ### Gateway (`gateway/`)
 
@@ -205,6 +206,7 @@ Details in [security.md](security.md).
 agent/               namespace agent (watcher, collector, incident, diagnosis client)
 gateway/             gateway: auth, graph, rules, knowledge base, server
 kubelantern_common/  shared redaction
+notifier/            notification sidecar: Teams / Slack / webhook formats and delivery
 charts/              Helm charts: kubelantern-ai (once) and kubelantern-agent (per namespace)
 runbooks/shared/     platform-owned shared runbooks (baked into the gateway image)
 deployments/kind/    local kind cluster: config, chart values, egress demo, migration script

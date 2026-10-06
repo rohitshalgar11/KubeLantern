@@ -69,6 +69,14 @@ See [docs/helm-argocd.md](../../docs/helm-argocd.md) for the full ArgoCD setup.
 | `runbooks.syncSeconds` | `30` | Runbook push interval; `0` = off |
 | `runbooks.items` | `[]` | team runbooks to create (name, title, category, workloads, content) |
 | `runbooks.editors.groups` / `users` | `[]` | may edit Runbooks in this namespace |
+| `notifications.enabled` | `false` | post incidents to Teams / Slack / a webhook (see [docs/notifications.md](../../docs/notifications.md)) |
+| `notifications.existingSecret` | `kubelantern-notify` | Secret in this namespace with keys `teams` / `slack` / `webhook` (webhook URLs) |
+| `notifications.channels` | `["teams"]` | which keys to use |
+| `notifications.events` | `["diagnosis", "resolved"]` | also: `opened`, `cause_changed`, `scope_changed`, `ongoing` |
+| `notifications.detail` | `summary` | `full` adds evidence and log lines (redacted) |
+| `notifications.maxPerMinute` | `20` | messages per minute from this namespace |
+| `notifications.allowHttp` | `false` | allow `http://` URLs (testing only) |
+| `notifications.egressCidrs` | `[]` | with egress lockdown: where HTTPS may go (empty = anywhere) |
 | `networkPolicy.egress.enabled` | `false` | allow DNS, API server and gateway under default-deny egress |
 | `networkPolicy.egress.dns.namespace` | `kube-system` | |
 | `networkPolicy.egress.dns.podLabels` | `{k8s-app: kube-dns}` | |

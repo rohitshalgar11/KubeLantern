@@ -4,6 +4,7 @@ COPY pyproject.toml README.md ./
 COPY agent ./agent
 COPY gateway ./gateway
 COPY kubelantern_common ./kubelantern_common
+COPY notifier ./notifier
 RUN pip install --no-cache-dir --prefix=/install .
 
 FROM python:3.12-slim

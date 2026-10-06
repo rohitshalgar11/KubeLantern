@@ -15,7 +15,8 @@ EGRESS    ?= false
         test-scale test-cause-change test-recover \
         gateway-image ai-up ai-pull ai-status ai-logs ai-down test-gateway \
         ai-model eval onboard-runbooks runbooks-demo test-rag \
-        chart-lint egress-lockdown egress-unlock migrate-to-helm incidents test-incidents
+        chart-lint egress-lockdown egress-unlock migrate-to-helm incidents test-incidents \
+        notify-sink notify-sink-logs test-notify notify-off
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-18s\033[0m %s\n",$$1,$$2}'
@@ -145,6 +146,21 @@ incidents: ## List persisted incidents (NS=demo)
 
 test-incidents: ## Verify incidents survive an agent restart and resolve (NS=demo, ~8 min)
 	bash tests/incidents/verify-incidents.sh $(NS)
+
+# ---- notifications (Stage 9) ---------------------------------------------
+notify-sink: ## Deploy a test webhook receiver that prints Teams/Slack/webhook payloads
+	kubectl apply -f tests/notify/webhook-sink.yaml
+	kubectl -n kubelantern-test rollout status deploy/webhook-sink --timeout=120s
+
+notify-sink-logs: ## Follow what the test webhook receiver got
+	kubectl -n kubelantern-test logs -f deploy/webhook-sink
+
+test-notify: ## Verify notifications end to end against the test receiver (NS=demo, ~8 min)
+	bash tests/notify/verify-notify.sh $(NS)
+
+notify-off: ## Turn notifications off again for NS
+	$(HELM) upgrade kubelantern-agent charts/kubelantern-agent -n $(NS) \
+	  --reuse-values --set notifications.enabled=false --wait --timeout 120s
 
 # ---- security ------------------------------------------------------------
 test-rbac: ## Verify namespace isolation (payments vs orders)

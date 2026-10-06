@@ -65,6 +65,42 @@ runbooks:
     groups: []
     users: []
 
+# Notifications to Microsoft Teams, Slack or a generic webhook (Stage 9).
+# Off by default: a chat message leaves the cluster.
+notifications:
+  enabled: false
+  # Secret in THIS namespace holding the webhook URLs, one key per channel:
+  #   teams   = Teams Workflows URL ("Post to a channel when a webhook request is received")
+  #   slack   = Slack incoming-webhook URL
+  #   webhook = any HTTPS endpoint receiving KubeLantern JSON
+  # Create it with your usual tool (External Secrets, Sealed Secrets, kubectl...).
+  # It is mounted only into the notifier container; the agent never sees it.
+  existingSecret: kubelantern-notify
+  # Which keys of the Secret to use.
+  channels: ["teams"]
+  # When to post. diagnosis = when the cause is known (includes "diagnosis
+  # unavailable" if the AI fails); resolved = when it's over. Also available:
+  # opened, cause_changed, scope_changed, ongoing. Without AI (gateway.url empty),
+  # "opened" is sent automatically.
+  events: ["diagnosis", "resolved"]
+  # summary = cause, next steps, escalation. full = also evidence and log lines
+  # (redacted) — more data leaves the cluster.
+  detail: summary
+  # Upper limit of messages per minute from this namespace.
+  maxPerMinute: 20
+  # Allow http:// URLs (testing only; real webhooks are https).
+  allowHttp: false
+  # With networkPolicy.egress.enabled: where the notifier may connect on 443.
+  # Empty = any destination. (NetworkPolicy applies to the whole pod.)
+  egressCidrs: []
+  resources:
+    requests:
+      cpu: 5m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 96Mi
+
 # For namespaces with a default-deny EGRESS policy: allow exactly what the
 # agent needs — DNS, the Kubernetes API server and the KubeLantern gateway.
 networkPolicy:

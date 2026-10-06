@@ -1,0 +1,52 @@
+# Test-only webhook receiver: logs every POST body. Lets you see the exact
+# Teams / Slack / webhook payloads without a real Teams channel.
+# Deployed by `make notify-sink` into namespace kubelantern-test.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubelantern-test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-sink
+  namespace: kubelantern-test
+  labels: { app: webhook-sink }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: webhook-sink }
+  template:
+    metadata:
+      labels: { app: webhook-sink }
+    spec:
+      containers:
+        - name: sink
+          image: kubelantern-agent:dev        # any image with python3
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-c"]
+          args:
+            - |
+              import json, sys
+              from http.server import BaseHTTPRequestHandler, HTTPServer
+              class H(BaseHTTPRequestHandler):
+                  def log_message(self, *a): pass
+                  def do_POST(self):
+                      body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                      print(f"=== POST {self.path}", flush=True)
+                      print(body.decode(), flush=True)
+                      self.send_response(200); self.end_headers(); self.wfile.write(b"1")
+              HTTPServer(("0.0.0.0", 8080), H).serve_forever()
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-sink
+  namespace: kubelantern-test
+spec:
+  selector: { app: webhook-sink }
+  ports:
+    - port: 8080
+      targetPort: 8080

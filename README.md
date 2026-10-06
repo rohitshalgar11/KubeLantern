@@ -139,10 +139,12 @@ flowchart LR
   an audience-bound ServiceAccount token; the namespace comes from identity.
 - **Team knowledge stays with the team.** Runbooks are namespaced objects;
   retrieval only ever returns shared + the caller's own.
-- **Private by default.** The model runs in-cluster (Ollama). Nothing leaves.
+- **Private by default.** The model runs in-cluster (Ollama). Nothing leaves
+  unless a team turns on notifications for its own Teams or Slack channel.
 - **Small model, reliable answers.** Rules, verified facts and validation
   around the model — it cannot override a confident category.
-- **Quiet.** One incident and one model call per real problem, not per restart.
+- **Quiet.** One incident and one model call per real problem, not per restart;
+  in Teams that's two messages: diagnosed, then resolved.
 - **Advisory only.** KubeLantern never changes your workloads. Its only write is its own incident records, so incidents survive restarts and teams can `kubectl get incidents`.
 
 See [how it compares](docs/comparison.md) with K8sGPT, HolmesGPT and kagent —
@@ -186,10 +188,11 @@ your charts, with optional egress rules for default-deny-egress namespaces:
 
 | Check | What it proves | Result |
 |---|---|---|
-| `make test` | 174 unit tests, incl. an RBAC policy guard on the chart and an adversarial model | ✅ |
+| `make test` | 196 unit tests, incl. an RBAC policy guard on the chart and an adversarial model | ✅ |
 | `make chart-lint` + CI | both charts lint, render and pass Kubernetes schema validation; an agent under default-deny egress still opens incidents | ✅ in CI |
-| `make test-rbac` | payments agent gets 403 on orders, Secrets, cluster scope; may write only its own incidents | 83 checks |
-| `make test-incidents` | an incident survives an agent restart (same ID, no re-diagnosis) and resolves | live |
+| `make test-rbac` | payments agent gets 403 on orders, Secrets, cluster scope; may write only its own incidents | 83 checks ✅ |
+| `make test-incidents` | an incident survives an agent restart (same ID, no re-diagnosis) and resolves | 7/7 ✅ |
+| `make test-notify` | Teams card with the diagnosis and a resolved card arrive; the agent can't read the webhook URL | live |
 | `make test-gateway` | token audience, identity, namespace stamping, NetworkPolicy | 8/8 ✅ |
 | `make test-rag` | a private payments runbook never reaches demo | 8/8 ✅ |
 | `make eval` | diagnosis quality on 9 scenarios via the real gateway | 9/9 ✅ |
@@ -206,7 +209,8 @@ your charts, with optional egress rules for default-deny-egress namespaces:
 | [Runbooks](docs/runbooks.md) | writing team runbooks, onboarding, isolation |
 | [Comparison](docs/comparison.md) | KubeLantern vs K8sGPT, HolmesGPT, kagent |
 | [Build journey](docs/journey.md) | the ten stages, and what went wrong along the way |
-| [Roadmap](docs/roadmap.md) | incident persistence, notifications, hardening |
+| [Notifications](docs/notifications.md) | Microsoft Teams (Workflows), Slack, webhook; per-namespace, Secret isolation |
+| [Roadmap](docs/roadmap.md) | production hardening |
 
 ## Status
 
@@ -219,8 +223,8 @@ your charts, with optional egress rules for default-deny-egress namespaces:
 | 5 | Local LLM + gateway | ✅ |
 | 6 | LangGraph diagnosis | ✅ |
 | 7 | Runbooks / RAG | ✅ |
-| 8 | Helm charts + GitOps (ArgoCD) ✅ · incident persistence | in progress |
-| 9 | Notifications | planned |
+| 8 | Helm charts + GitOps (ArgoCD) · incident persistence | ✅ |
+| 9 | Notifications: Microsoft Teams, Slack, webhook | built, live test pending |
 | 10 | Production hardening | planned |
 
 KubeLantern is **alpha**: tested on kind, not yet production-hardened.

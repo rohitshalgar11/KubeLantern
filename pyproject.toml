@@ -21,13 +21,14 @@ dev = [
 [project.scripts]
 kubelantern-agent = "agent.main:main"
 kubelantern-gateway = "gateway.server:main"
+kubelantern-notifier = "notifier.server:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["agent*", "gateway*", "kubelantern_common*"]
+include = ["agent*", "gateway*", "kubelantern_common*", "notifier*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]

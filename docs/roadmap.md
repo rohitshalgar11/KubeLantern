@@ -3,8 +3,8 @@
 | Stage | Status |
 |---|---|
 | 1–7 · agent, collector, incidents, gateway, graph, RAG | ✅ done |
-| 8 · Helm charts + GitOps, incident persistence | charts ✅ · incidents built, live test pending |
-| 9 · Per-namespace notifications | planned |
+| 8 · Helm charts + GitOps, incident persistence | ✅ |
+| 9 · Per-namespace notifications | built, live test pending |
 | 10 · Production hardening | planned |
 
 ## Stage 8 — Helm charts, GitOps and incident persistence
@@ -38,16 +38,19 @@ Done:
 
 ## Stage 9 — Notifications
 
-- Per-namespace destinations (Slack, Microsoft Teams, generic webhook), owned
-  by the team in its namespace.
-- Sends OPENED, DIAGNOSIS, CAUSE CHANGED and RESOLVED; threads updates of one
-  incident together.
-- Webhook URL in a Secret the team creates with its usual tool (External
-  Secrets + Key Vault, Sealed Secrets, SOPS…); the chart references it by name.
-- The Secret is **mounted only into a small notifier sidecar**; the agent
-  container can't see it, and the ServiceAccount still has no Secret access.
-- Off by default; `summary` detail by default (title, category, cause, first
-  step, escalation), because a chat message leaves the cluster.
+Built ([docs](notifications.md)):
+- Microsoft Teams (Workflows webhook, Adaptive Card), Slack (incoming webhook)
+  and a generic JSON webhook, configured per namespace.
+- Default: one message when the diagnosis is ready, one when resolved; other
+  events optional. Restored incidents don't re-notify.
+- Webhook URLs in a Secret the team creates with its usual tool; mounted only
+  into a notifier sidecar listening on 127.0.0.1. The agent container never
+  sees them, and the notifier has no Kubernetes API token.
+- Off by default; `summary` detail (no logs) by default; redacted twice;
+  https only; rate-limited; retries with `Retry-After`.
+
+Not done: threading updates of one incident into a single Teams/Slack thread
+(webhooks can't reply to a message; it needs a bot/app integration).
 
 ## Stage 10 — Production hardening
 

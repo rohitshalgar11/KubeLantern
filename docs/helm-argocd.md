@@ -326,17 +326,15 @@ secret is needed. Otherwise set `imagePullSecrets`. Mirror `ollama/ollama` and
 
 ---
 
-## 5. Secrets in GitOps (for notifications, Stage 9)
+## 5. Secrets in GitOps (notifications)
 
-Today KubeLantern needs **no Secrets at all**. The agent's gateway token is a
-projected ServiceAccount token, minted by the kubelet.
-
-Stage 9 adds Teams/Slack/webhook notifications, and a webhook URL is a
-credential: anyone holding it can post into your channel. In GitOps everything
+KubeLantern itself needs **no Secrets**: the agent's tokens are projected by
+the kubelet. Only notifications need one, because a Teams/Slack/webhook URL is
+a credential: anyone holding it can post into your channel. In GitOps everything
 comes from Git, and credentials must not be committed in plain text. So each
 organisation uses a tool that delivers secrets into the cluster safely.
-KubeLantern doesn't pick one: the chart will reference an **existing Secret by
-name**, and you create it however you already do:
+KubeLantern doesn't pick one: the chart references an **existing Secret by
+name** (`notifications.existingSecret`), and you create it however you already do:
 
 | Tool | How the Secret gets there |
 |---|---|
@@ -345,10 +343,10 @@ name**, and you create it however you already do:
 | **SOPS** (ArgoCD plugin / helm-secrets) | values files encrypted in Git, decrypted at render time |
 | `kubectl create secret` | fine for testing; not GitOps |
 
-The agent will still have **no RBAC access to Secrets**. The webhook Secret is
-mounted only into a small notifier container, which a pod can do without any
-Secret permission on its ServiceAccount. The design is in the
-[roadmap](roadmap.md).
+The agent still has **no RBAC access to Secrets**. The webhook Secret is
+mounted only into the notifier container, which a pod can do without any
+Secret permission on its ServiceAccount. Setup for Teams, Slack and webhooks,
+and an External Secrets example: [notifications.md](notifications.md).
 
 ---
 

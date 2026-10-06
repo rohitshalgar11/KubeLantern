@@ -30,6 +30,8 @@ from agent.diagnosis.client import (
     format_diagnosis_error,
 )
 from agent.incident.manager import IncidentManager, IncidentUpdate, format_update
+from agent.incident.store import diagnosis_summary
+from agent.notify import UPDATE_KINDS
 from agent.watcher.detector import Failure
 from agent.watcher.pod_watcher import PodWatcher
 
@@ -58,7 +60,8 @@ class Agent:
     """Glues watcher, incident manager, collector and output together."""
 
     def __init__(self, namespace: str, manager: IncidentManager, collector: DiagnosticCollector,
-                 output: str = "text", log_lines: int = 5, diagnosis=None, store=None) -> None:
+                 output: str = "text", log_lines: int = 5, diagnosis=None, store=None,
+                 notifier=None) -> None:
         self.namespace = namespace
         self.manager = manager
         self.collector = collector
@@ -71,6 +74,10 @@ class Agent:
         self.store = store
         # Restored incidents that never got a diagnosis (agent restarted mid-way).
         self._undiagnosed: set[str] = set()
+        # Optional NotifyClient (Teams / Slack / webhook via the notifier sidecar).
+        self.notifier = notifier
+        # Evidence lines per incident, kept until its diagnosis is sent (detail=full).
+        self._evidence: dict[str, list[str]] = {}
 
     def restore(self) -> list[dict]:
         """Pick up open incidents persisted before a restart (no new OPENED)."""
@@ -135,13 +142,29 @@ class Agent:
 
         if self.store is not None:
             self.store.save(u.incident)
+        if self.notifier is not None:
+            self._notify_update(u, bundle)
         if self.diagnosis is not None and u.needs_evidence and bundle is not None:
             self.diagnosis.submit(u.incident, bundle)
+
+    def _notify_update(self, u: IncidentUpdate, bundle: dict | None) -> None:
+        lines = None
+        if bundle is not None:
+            lines = format_evidence(bundle, log_lines=self.log_lines, header=False).splitlines()
+            if len(self._evidence) < 500:
+                self._evidence[u.incident["id"]] = lines
+        if u.kind == "resolved":
+            self._evidence.pop(u.incident["id"], None)
+        self.notifier.notify(UPDATE_KINDS[u.kind], u.incident, previous_cause=u.previous_cause,
+                             previous_pod_count=u.previous_pod_count, evidence=lines)
 
     # diagnosis callbacks (run on the diagnosis worker thread)
     def on_diagnosis(self, incident: dict, result: dict) -> None:
         if self.store is not None:
             self.store.save_diagnosis(incident["id"], result)
+        if self.notifier is not None:
+            self.notifier.notify("diagnosis", incident, diagnosis=diagnosis_summary(result),
+                                 evidence=self._evidence.pop(incident["id"], None))
         if self.output == "json":
             self._print(json.dumps({"event": "diagnosis", "incident_id": incident["id"], **result}))
         else:
@@ -149,6 +172,9 @@ class Agent:
 
     def on_diagnosis_error(self, incident: dict, error: str) -> None:
         log.warning("diagnosis for %s failed: %s", incident["id"], error)
+        if self.notifier is not None:
+            self.notifier.notify("diagnosis_failed", incident, error=error,
+                                 evidence=self._evidence.pop(incident["id"], None))
         if self.output == "json":
             self._print(json.dumps({"event": "diagnosis_error", "incident_id": incident["id"],
                                     "error": error}))
@@ -225,6 +251,19 @@ def main(argv: list[str] | None = None) -> None:
             retention_days=_env_float("KUBELANTERN_INCIDENT_RETENTION_DAYS", 30),
         ).start()
     gateway_url = os.environ.get("KUBELANTERN_GATEWAY_URL", "").strip()
+    notify_url = os.environ.get("KUBELANTERN_NOTIFY_URL", "").strip()
+    if notify_url:
+        from agent.notify import DEFAULT_EVENTS, NotifyClient
+
+        events = {e.strip() for e in os.environ.get(
+            "KUBELANTERN_NOTIFY_EVENTS", ",".join(DEFAULT_EVENTS)).split(",") if e.strip()}
+        if "diagnosis" in events:
+            events.add("diagnosis_failed")       # the diagnosis never came: say so
+            if not gateway_url:
+                events.add("opened")             # no AI: announce the incident itself
+        agent.notifier = NotifyClient(
+            notify_url, events, detail=os.environ.get("KUBELANTERN_NOTIFY_DETAIL", "summary"),
+        ).start()
     token_path = os.environ.get("KUBELANTERN_TOKEN_PATH", "/var/run/secrets/kubelantern/token")
     stop = threading.Event()
     if gateway_url:
@@ -268,6 +307,11 @@ def main(argv: list[str] | None = None) -> None:
                 agent.store.flush()   # don't lose the last incident update
             except Exception:
                 log.exception("flushing incidents failed")
+        if agent.notifier is not None:
+            try:
+                agent.notifier.flush()
+            except Exception:
+                log.exception("flushing notifications failed")
         watcher.stop()
         sys.stdout.flush()
         sys.stderr.flush()
@@ -280,7 +324,8 @@ def main(argv: list[str] | None = None) -> None:
         f"KubeLantern agent started — namespace: {namespace} "
         f"(resolve after {int(args.resolve_after_seconds)}s healthy, "
         f"reminder every {args.reminder_minutes:g}m, "
-        f"diagnosis: {gateway_url or 'off'})\n",
+        f"diagnosis: {gateway_url or 'off'}, "
+        f"notifications: {'on' if notify_url else 'off'})\n",
         flush=True,
     )
     agent.restore()   # after the banner, before watching: no duplicate OPENED

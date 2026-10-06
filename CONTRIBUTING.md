@@ -29,9 +29,11 @@ will not be merged, however useful the feature:
 2. **The gateway never reads cluster objects.** Evidence is collected by the
    agent and pushed.
 3. **Namespace comes from the verified identity**, never from a request body.
-4. **Audit logs contain metadata only** — no logs, evidence, diagnosis text or
+4. **Webhook URLs stay in the notifier sidecar.** Never mount the notification
+   Secret into the agent container or give the ServiceAccount Secret access.
+5. **Audit logs contain metadata only** — no logs, evidence, diagnosis text or
    runbook content.
-5. **KubeLantern stays advisory.** It never changes workloads; the agent's only
+6. **KubeLantern stays advisory.** It never changes workloads; the agent's only
    write is its own incident records.
 
 ## Pull requests

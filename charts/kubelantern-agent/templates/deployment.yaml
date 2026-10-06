@@ -19,12 +19,17 @@ spec:
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.podAnnotations }}
       annotations:
+        # kubectl logs/exec deploy/kubelantern-agent -> the agent, not the sidecar
+        kubectl.kubernetes.io/default-container: agent
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "kubelantern-agent.name" . }}
+      # The Kubernetes API token is mounted explicitly into the agent container
+      # only (volume kube-api-access below), not into the notifier.
+      automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -70,6 +75,14 @@ spec:
               value: /var/run/secrets/kubelantern/token
             - name: KUBELANTERN_RUNBOOK_SYNC_SECONDS
               value: {{ .Values.runbooks.syncSeconds | quote }}
+            {{- if .Values.notifications.enabled }}
+            - name: KUBELANTERN_NOTIFY_URL
+              value: http://127.0.0.1:8081/v1/notify
+            - name: KUBELANTERN_NOTIFY_EVENTS
+              value: {{ join "," .Values.notifications.events | quote }}
+            - name: KUBELANTERN_NOTIFY_DETAIL
+              value: {{ .Values.notifications.detail | quote }}
+            {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
@@ -78,10 +91,72 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+            - name: kube-api-access
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
             - name: gateway-token
               mountPath: /var/run/secrets/kubelantern
               readOnly: true
+        {{- if .Values.notifications.enabled }}
+        # Notifier sidecar: the only container that can read the webhook URLs.
+        # Listens on 127.0.0.1 only; has no Kubernetes API token.
+        - name: notifier
+          image: {{ include "kubelantern-agent.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["kubelantern-notifier"]
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: KUBELANTERN_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            - name: KUBELANTERN_NOTIFY_CHANNELS
+              value: {{ join "," .Values.notifications.channels | quote }}
+            - name: KUBELANTERN_NOTIFY_DETAIL
+              value: {{ .Values.notifications.detail | quote }}
+            - name: KUBELANTERN_NOTIFY_MAX_PER_MINUTE
+              value: {{ .Values.notifications.maxPerMinute | quote }}
+            - name: KUBELANTERN_NOTIFY_ALLOW_HTTP
+              value: {{ .Values.notifications.allowHttp | toString | quote }}
+            - name: KUBELANTERN_NOTIFY_SECRET_DIR
+              value: /etc/kubelantern/notify
+          resources:
+            {{- toYaml .Values.notifications.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: notify-secret
+              mountPath: /etc/kubelantern/notify
+              readOnly: true
+        {{- end }}
       volumes:
+        # Standard API credentials, projected by the kubelet (same as automount),
+        # mounted into the agent container only.
+        - name: kube-api-access
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3607
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+              - downwardAPI:
+                  items:
+                    - path: namespace
+                      fieldRef:
+                        fieldPath: metadata.namespace
+        {{- if .Values.notifications.enabled }}
+        - name: notify-secret
+          secret:
+            secretName: {{ required "notifications.existingSecret is required" .Values.notifications.existingSecret }}
+            # Missing Secret: the agent still runs; the notifier logs "no webhook URL".
+            optional: true
+        {{- end }}
         # Short-lived token valid ONLY for the gateway (audience-bound), rotated by
         # the kubelet. It is useless against the Kubernetes API.
         - name: gateway-token

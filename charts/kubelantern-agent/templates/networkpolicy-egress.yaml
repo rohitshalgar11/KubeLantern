@@ -52,4 +52,17 @@ spec:
       ports:
         - port: {{ .Values.gateway.port }}
           protocol: TCP
+    {{- if .Values.notifications.enabled }}
+    # Notifier -> Teams / Slack / webhook (HTTPS)
+    - ports:
+        - port: 443
+          protocol: TCP
+      {{- with .Values.notifications.egressCidrs }}
+      to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
 {{- end }}

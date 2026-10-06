@@ -134,8 +134,13 @@ See [helm-argocd.md](helm-argocd.md#3-namespaces-with-default-deny-egress).
   latency, category, confidence, counts. Never logs, evidence, diagnosis text or
   runbook content (the gateway's logs are read by the platform team, not the
   tenant).
-- **Advisory only:** KubeLantern never changes the cluster. Auto-remediation is
+- **Advisory only:** KubeLantern never changes workloads. Auto-remediation is
   deliberately out of scope until diagnosis is proven reliable.
+- **Notifications** (off by default): webhook URLs live in a Secret mounted
+  only into the notifier sidecar, which listens on `127.0.0.1` and has no
+  Kubernetes API token. The agent container has the API token but never the
+  URLs. `summary` detail sends no logs, and everything is redacted again before
+  sending. See [notifications.md](notifications.md).
 
 ## Cluster-level footprint
 
@@ -160,5 +165,7 @@ No app team and no agent receives a ClusterRole. Teams manage runbooks through a
 | Secrets in logs reach the model or audit log | redaction ×2; metadata-only audit |
 | Log line tries to steer the model | fencing + system prompt + rule-based validation |
 | Noisy tenant starves others | per-namespace rate limit, single model slot, bounded queues |
+| Webhook URL stolen from the agent | not mounted in the agent container; only the notifier sidecar reads it |
+| Incident data leaks to chat | notifications off by default, per namespace; summary detail (no logs) by default; redacted |
 
 To report a vulnerability, see [SECURITY.md](../SECURITY.md).

@@ -127,3 +127,16 @@ def test_rendered_agent_chart(values):
         assert d["metadata"]["namespace"] == "payments", d["kind"]
     [role] = [d for d in docs if d["kind"] == "Role" and d["metadata"]["name"] == "kubelantern-agent"]
     assert role["rules"] == _rules()
+
+
+@pytest.mark.skipif(not HELM, reason="helm not installed")
+def test_rendered_notifier_isolation():
+    """Webhook Secret only in the notifier; Kubernetes API token only in the agent."""
+    docs = _render("--set", "notifications.enabled=true")
+    [dep] = [d for d in docs if d["kind"] == "Deployment"]
+    spec = dep["spec"]["template"]["spec"]
+    assert spec["automountServiceAccountToken"] is False
+    mounts = {c["name"]: {m["name"] for m in c.get("volumeMounts", [])} for c in spec["containers"]}
+    assert "notify-secret" in mounts["notifier"] and "notify-secret" not in mounts["agent"]
+    assert "kube-api-access" in mounts["agent"] and "kube-api-access" not in mounts["notifier"]
+    assert mounts["notifier"] == {"notify-secret"}
