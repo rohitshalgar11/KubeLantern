@@ -229,7 +229,10 @@ The first live run still missed a one-line log ("FATAL: sorry, too many clients
 already"): a Symptoms section listing five different errors was embedded as one
 averaged vector. Each Symptoms line is now also indexed on its own.
 
-**Verified:** `make test-kb` 7/7 (built-in library from the ConfigMap, live
+**Verified:** `make test-notify` 10/10 (Teams card diagnosed and resolved,
+Slack, webhook, email to a Teams channel address; the agent can't read the
+webhook URLs and the notifier has no API token); `make test-maintenance` 9/9;
+`make test-kb` 7/7 (built-in library from the ConfigMap, live
 reload without a restart, override, removal); `make kb-check` with the real
 embeddings: right runbook found for 48/48 known failures, first for 46/48.
 

@@ -9,7 +9,7 @@ diagnosis — with the team's own runbook steps and on-call contact — from a
 **local LLM running inside your cluster**. Each team sees only its own
 namespace: in Kubernetes RBAC, at the AI boundary, and in the knowledge base.
 
-[![CI](https://github.com/OWNER/kubelantern/actions/workflows/ci.yaml/badge.svg)](.github/workflows/ci.yaml)
+[![CI](https://github.com/rohitshalgar11/KubeLantern/actions/workflows/ci.yaml/badge.svg)](https://github.com/rohitshalgar11/KubeLantern/actions/workflows/ci.yaml)
 ![status: alpha](https://img.shields.io/badge/status-alpha-orange)
 ![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)
 
@@ -193,11 +193,13 @@ your charts, with optional egress rules for default-deny-egress namespaces:
 
 | Check | What it proves | Result |
 |---|---|---|
-| `make test` | 203 unit tests, incl. an RBAC policy guard on the chart and an adversarial model | ✅ |
+| `make test` | 236 unit tests, incl. an RBAC policy guard on the chart and an adversarial model | ✅ |
 | `make chart-lint` + CI | both charts lint, render and pass Kubernetes schema validation; an agent under default-deny egress still opens incidents | ✅ in CI |
 | `make test-rbac` | payments agent gets 403 on orders, Secrets, cluster scope; may write only its own incidents | 83 checks ✅ |
 | `make test-incidents` | an incident survives an agent restart (same ID, no re-diagnosis) and resolves | 7/7 ✅ |
-| `make test-notify` | Teams card with the diagnosis and a resolved card arrive; the agent can't read the webhook URL | live |
+| `make test-notify` | Teams cards (diagnosed, resolved), Slack, webhook and email arrive; the agent can't read the webhook URLs | 10/10 ✅ |
+| `make test-maintenance` | during a pause nothing is opened or sent; afterwards only still-broken workloads become incidents | 9/9 ✅ |
+| `make test-kb` | shared runbooks load from ConfigMaps, reload live, override, removal; right runbook for known failures | 7/7 ✅, 48/48 found |
 | `make test-gateway` | token audience, identity, namespace stamping, NetworkPolicy | 8/8 ✅ |
 | `make test-rag` | a private payments runbook never reaches demo | 8/8 ✅ |
 | `make eval` | diagnosis quality on 9 scenarios via the real gateway | 9/9 ✅ |
@@ -230,7 +232,7 @@ your charts, with optional egress rules for default-deny-egress namespaces:
 | 6 | LangGraph diagnosis | ✅ |
 | 7 | Runbooks / RAG | ✅ |
 | 8 | Helm charts + GitOps (ArgoCD) · incident persistence | ✅ |
-| 9 | Notifications (Teams, email, Slack, webhook) · maintenance mode · shared knowledge base | built, live test pending |
+| 9 | Notifications (Teams, email, Slack, webhook) · maintenance mode · shared knowledge base | ✅ |
 | 10 | Production hardening | planned |
 
 KubeLantern is **alpha**: tested on kind, not yet production-hardened.
