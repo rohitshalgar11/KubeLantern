@@ -8,7 +8,9 @@
 #   4. the workload is fixed -> the object becomes Resolved
 #
 # Usage: tests/incidents/verify-incidents.sh [namespace]   (default: demo)
-set -uo pipefail
+# No pipefail: checks use `... | grep -q`, and grep -q exits at the first match,
+# so the writer (kubectl logs) gets SIGPIPE and pipefail would turn a match into a failure.
+set -u
 
 NS="${1:-demo}"
 PASS=0

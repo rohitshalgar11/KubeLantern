@@ -10,7 +10,9 @@
 # Needs the kind values (existingConfigMaps: [kubelantern-runbooks-platform],
 # reloadSeconds: 10): make ai-up
 # Usage: tests/kb/verify-kb.sh
-set -uo pipefail
+# No pipefail: checks use `... | grep -q`, and grep -q exits at the first match,
+# so the writer (kubectl logs) gets SIGPIPE and pipefail would turn a match into a failure.
+set -u
 
 AI_NS="${AI_NS:-kubelantern-ai}"
 CM=kubelantern-runbooks-platform

@@ -8,7 +8,9 @@
 #   4. fixing the workload produces a "resolved" card
 #
 # Usage: tests/notify/verify-notify.sh [namespace]   (default: demo)
-set -uo pipefail
+# No pipefail: checks use `... | grep -q`, and grep -q exits at the first match,
+# so the writer (kubectl logs) gets SIGPIPE and pipefail would turn a match into a failure.
+set -u
 NS="${1:-demo}"
 SINK=http://webhook-sink.kubelantern-test.svc:8080
 PASS=0; FAIL=0

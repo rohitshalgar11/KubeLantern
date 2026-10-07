@@ -6,7 +6,9 @@
 # namespace isolation. Then checks NetworkPolicy blocks everything else.
 #
 # Usage: tests/gateway/verify-gateway.sh [--skip-llm]
-set -uo pipefail
+# No pipefail: checks use `... | grep -q`, and grep -q exits at the first match,
+# so the writer (kubectl logs) gets SIGPIPE and pipefail would turn a match into a failure.
+set -u
 
 NS=demo
 OTHER=payments

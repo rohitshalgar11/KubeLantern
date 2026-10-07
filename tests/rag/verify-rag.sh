@@ -6,7 +6,9 @@
 # 3. Both agents sync them to the gateway.
 # 4. A demo incident must cite demo + shared runbooks and NEVER the payments one.
 # 5. The same incident from payments must cite the payments runbook.
-set -uo pipefail
+# No pipefail: checks use `... | grep -q`, and grep -q exits at the first match,
+# so the writer (kubectl logs) gets SIGPIPE and pipefail would turn a match into a failure.
+set -u
 PASS=0; FAIL=0
 GW=http://kubelantern-gateway.kubelantern-ai.svc:8080/v1/diagnose
 MARKER=PAYMENTS-PRIVATE-MARKER

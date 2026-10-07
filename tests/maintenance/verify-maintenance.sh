@@ -9,7 +9,9 @@
 #
 # Needs the kind values (settleSeconds 60, pollSeconds 10): make deploy-agents
 # Usage: tests/maintenance/verify-maintenance.sh [namespace]   (default: demo)
-set -uo pipefail
+# No pipefail: checks use `... | grep -q`, and grep -q exits at the first match,
+# so the writer (kubectl logs) gets SIGPIPE and pipefail would turn a match into a failure.
+set -u
 
 NS="${1:-demo}"
 AI_NS="${AI_NS:-kubelantern-ai}"
