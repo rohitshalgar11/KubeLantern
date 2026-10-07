@@ -59,6 +59,8 @@ jobs:
           config: deployments/kind/kind-config.yaml
       - name: Build and load images
         run: make load
+      - name: Install the KubeLantern CRDs (the AI part itself is too heavy for CI)
+        run: make crds
       - name: Deploy agents (Helm)
         run: make deploy-agents
       - name: RBAC isolation gate

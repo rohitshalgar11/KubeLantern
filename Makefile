@@ -17,7 +17,7 @@ AGENT_IMAGE_ID = $(shell docker image inspect -f '{{.Id}}' $(IMAGE) 2>/dev/null 
         deploy-agent deploy-agents logs test-crashloop test-oom test-imagepull \
         test-failures clean-failures test-rbac up run-local \
         test-scale test-cause-change test-recover \
-        gateway-image ai-up ai-pull ai-status ai-logs ai-down test-gateway \
+        crds gateway-image ai-up ai-pull ai-status ai-logs ai-down test-gateway \
         ai-model eval onboard-runbooks runbooks-demo test-rag \
         chart-lint egress-lockdown egress-unlock migrate-to-helm incidents test-incidents \
         notify-sink notify-sink-logs test-notify notify-off \
@@ -105,6 +105,13 @@ clean-failures: ## Remove failure scenarios
 	kubectl delete -f tests/crashloop/ -f tests/oom/ -f tests/imagepull/ --ignore-not-found
 
 # ---- AI platform: gateway + Ollama + Qdrant + CRDs (kubelantern-ai chart)
+crds: ## Install only the KubeLantern CRDs (Runbook, Incident), without the AI part (used by CI)
+	@for t in crd-runbook crd-incident; do \
+	  $(HELM) template kubelantern-ai charts/kubelantern-ai --show-only templates/$$t.yaml; echo "---"; \
+	done | kubectl apply -f -
+	kubectl wait --for condition=established --timeout=60s \
+	  crd/runbooks.kubelantern.io crd/incidents.kubelantern.io
+
 ai-up: ## Install/upgrade the kubelantern-ai chart (MODEL=qwen2.5:1.5b)
 	@echo "First run downloads the Ollama image (~4 GB) and models (~1.3 GB); this can take a while."
 	$(HELM) upgrade --install kubelantern-ai charts/kubelantern-ai -n $(AI_NS) --create-namespace \
