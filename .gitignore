@@ -6,3 +6,6 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+
+# Windows download markers (copying files from Windows into WSL)
+*Zone.Identifier
