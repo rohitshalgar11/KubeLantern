@@ -1,8 +1,0 @@
-# Local kind cluster: images are built and loaded by `make load`, not pulled.
-image:
-  repository: kubelantern-agent
-  tag: dev
-  pullPolicy: IfNotPresent
-incidents:
-  # Shorter than the production default (300) so the demo resolves quickly.
-  resolveAfterSeconds: 120

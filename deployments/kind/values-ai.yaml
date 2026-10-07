@@ -1,6 +1,0 @@
-# Local kind cluster: images are built and loaded by `make load`, not pulled.
-gateway:
-  image:
-    repository: kubelantern-gateway
-    tag: dev
-    pullPolicy: IfNotPresent
