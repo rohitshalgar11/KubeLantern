@@ -1,13 +1,16 @@
 # KubeLantern
 
-**Namespace-isolated AI SRE for Kubernetes.**
+**Namespace-Isolated AI SRE for Kubernetes**
+
 *A light in every namespace — and only in its own.*
 
 KubeLantern watches each team's namespace, turns failing pods into clean
-incidents, collects the evidence an SRE would look at, and returns a grounded
-diagnosis — with the team's own runbook steps and on-call contact — from a
-**local LLM running inside your cluster**. Each team sees only its own
-namespace: in Kubernetes RBAC, at the AI boundary, and in the knowledge base.
+incidents, gathers the evidence an SRE would look at, and returns a grounded
+diagnosis — complete with the team's own runbook steps and on-call contact —
+from a **local LLM running inside your cluster**.
+
+Each team sees only its own namespace: in Kubernetes RBAC, at the AI boundary,
+and in the knowledge base.
 
 [![CI](https://github.com/rohitshalgar11/KubeLantern/actions/workflows/ci.yaml/badge.svg)](https://github.com/rohitshalgar11/KubeLantern/actions/workflows/ci.yaml)
 ![status: alpha](https://img.shields.io/badge/status-alpha-orange)
