@@ -1,0 +1,25 @@
+apiVersion: v2
+name: kubelantern-agent
+description: >-
+  KubeLantern namespace agent — watches one namespace, turns failing pods into
+  incidents with evidence, and asks the KubeLantern gateway for a diagnosis.
+  Namespaced Role only; never reads Secrets or ConfigMaps.
+type: application
+version: 0.2.0
+appVersion: "0.2.0"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/rohitshalgar11/KubeLantern
+sources:
+  - https://github.com/rohitshalgar11/KubeLantern
+keywords:
+  - kubernetes
+  - sre
+  - aiops
+  - llm
+  - multi-tenancy
+  - troubleshooting
+maintainers:
+  - name: rohitshalgar11
+    url: https://github.com/rohitshalgar11
+annotations:
+  artifacthub.io/license: Apache-2.0

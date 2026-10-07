@@ -1,0 +1,72 @@
+{{- if .Values.networkPolicy.egress.enabled }}
+{{- $egress := .Values.networkPolicy.egress }}
+# For namespaces with default-deny egress: the agent may reach DNS, the
+# Kubernetes API server and the KubeLantern gateway — nothing else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kubelantern-agent-egress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubelantern-agent.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "kubelantern-agent.selectorLabels" . | nindent 6 }}
+  policyTypes: ["Egress"]
+  egress:
+    # DNS (cluster DNS pods)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $egress.dns.namespace | quote }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $egress.dns.podLabels | nindent 14 }}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Kubernetes API server (watch pods, read logs/events)
+    - ports:
+        {{- range $egress.apiServer.ports }}
+        - port: {{ . }}
+          protocol: TCP
+        {{- end }}
+      {{- with $egress.apiServer.cidrs }}
+      to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+    # KubeLantern gateway
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.gateway.namespace | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kubelantern-gateway
+      ports:
+        - port: {{ .Values.gateway.port }}
+          protocol: TCP
+    {{- if .Values.notifications.enabled }}
+    # Notifier -> Teams / Slack / webhook (HTTPS) and SMTP for the email channel
+    - ports:
+        - port: 443
+          protocol: TCP
+        {{- if has "email" .Values.notifications.channels }}
+        - port: {{ .Values.notifications.email.smtpPort }}
+          protocol: TCP
+        {{- end }}
+      {{- with .Values.notifications.egressCidrs }}
+      to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+{{- end }}

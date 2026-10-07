@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": { "type": "object" },
+    "enabled": {
+      "type": "boolean",
+      "description": "Used by a parent chart's dependency condition (e.g. kubelantern.enabled); ignored by this chart."
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "imagePullSecrets": { "type": "array" },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string" },
+        "audience": { "type": "string", "minLength": 1 },
+        "namespace": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "tokenExpirationSeconds": { "type": "integer", "minimum": 600 }
+      }
+    },
+    "incidents": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "resolveAfterSeconds": { "type": "integer", "minimum": 30 },
+        "reminderMinutes": { "type": "integer", "minimum": 1 },
+        "persist": { "type": "boolean" },
+        "history": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "retentionDays": { "type": "number", "exclusiveMinimum": 0 },
+        "viewers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "groups": { "type": "array", "items": { "type": "string" } },
+            "users": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "runbooks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "syncSeconds": { "type": "integer", "minimum": 0 },
+        "items": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "title", "content"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 63 },
+              "title": { "type": "string", "minLength": 3, "maxLength": 200 },
+              "category": {
+                "enum": ["application-error", "dependency", "configuration", "resources", "image",
+                         "permissions", "probe", "node", "unknown"]
+              },
+              "workloads": { "type": "array", "items": { "type": "string" }, "maxItems": 20 },
+              "content": { "type": "string", "minLength": 10, "maxLength": 16384 }
+            }
+          }
+        },
+        "editors": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "groups": { "type": "array", "items": { "type": "string" } },
+            "users": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "existingSecret": { "type": "string" },
+        "channels": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "enum": ["teams", "slack", "webhook", "email"] }
+        },
+        "events": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "enum": ["opened", "diagnosis", "cause_changed", "scope_changed", "ongoing", "resolved"] }
+        },
+        "detail": { "enum": ["summary", "full"] },
+        "maxPerMinute": { "type": "integer", "minimum": 1, "maximum": 600 },
+        "allowInsecure": { "type": "boolean" },
+        "email": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "to": { "type": "array", "items": { "type": "string", "pattern": "^[^@\\s]+@[^@\\s]+$" } },
+            "from": { "type": "string" },
+            "smtpHost": { "type": "string" },
+            "smtpPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "tls": { "enum": ["starttls", "ssl", "none"] }
+          }
+        },
+        "egressCidrs": { "type": "array", "items": { "type": "string" } },
+        "resources": { "type": "object" }
+      }
+    },
+    "maintenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "paused": { "type": "boolean" },
+        "until": { "type": "string", "pattern": "^$|^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$" },
+        "reason": { "type": "string", "maxLength": 200 },
+        "settleSeconds": { "type": "integer", "minimum": 0, "maximum": 7200 },
+        "maxHours": { "type": "number", "exclusiveMinimum": 0, "maximum": 168 },
+        "pollSeconds": { "type": "integer", "minimum": 5, "maximum": 600 }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "egress": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "dns": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "namespace": { "type": "string" },
+                "podLabels": { "type": "object", "minProperties": 1 }
+              }
+            },
+            "apiServer": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cidrs": { "type": "array", "items": { "type": "string" } },
+                "ports": { "type": "array", "items": { "type": "integer" }, "minItems": 1 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "logLevel": { "enum": ["DEBUG", "INFO", "WARNING", "ERROR"] },
+    "output": { "enum": ["text", "json"] },
+    "logLines": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "resources": { "type": "object" },
+    "podAnnotations": { "type": "object" },
+    "podLabels": { "type": "object" },
+    "nodeSelector": { "type": "object" },
+    "tolerations": { "type": "array" },
+    "affinity": { "type": "object" },
+    "priorityClassName": { "type": "string" }
+  }
+}

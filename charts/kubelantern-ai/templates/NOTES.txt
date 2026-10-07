@@ -1,0 +1,19 @@
+KubeLantern platform installed in namespace "{{ .Release.Namespace }}".
+
+{{- if and .Values.ollama.enabled .Values.gateway.pullModels }}
+
+The gateway pulls {{ .Values.gateway.model }} and {{ .Values.gateway.embedModel }} into Ollama on
+first start (about 1.3 GB with the default models). It becomes Ready when they are available:
+
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/kubelantern-gateway --timeout=30m
+{{- end }}
+
+Next: install the kubelantern-agent chart into each team namespace, and label
+those namespaces so the gateway admits their agents:
+
+  kubectl label namespace <team-namespace> {{ range $k, $v := .Values.agentNamespaceSelector }}{{ $k }}={{ $v }} {{ end }}--overwrite
+{{- if ne .Release.Namespace "kubelantern-ai" }}
+
+NOTE: this namespace is not "kubelantern-ai". Set gateway.url and gateway.namespace
+in the agent chart to point here.
+{{- end }}

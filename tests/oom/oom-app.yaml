@@ -1,0 +1,22 @@
+# Allocates more memory than its 32Mi limit -> OOMKilled (exit 137)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oom-app
+  namespace: demo
+  labels: { kubelantern.io/test: oom }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: oom-app }
+  template:
+    metadata:
+      labels: { app: oom-app }
+    spec:
+      containers:
+        - name: oom-app
+          image: python:3.12-alpine
+          command: ["python", "-c", "x = bytearray(256 * 1024 * 1024); import time; time.sleep(3600)"]
+          resources:
+            requests: { memory: 16Mi }
+            limits: { memory: 32Mi }

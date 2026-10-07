@@ -1,0 +1,207 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kubelantern-agent.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubelantern-agent.labels" . | nindent 4 }}
+spec:
+  replicas: 1          # one watcher per namespace; incidents are per agent
+  strategy:
+    type: Recreate     # never two agents reporting the same incident
+  selector:
+    matchLabels:
+      {{- include "kubelantern-agent.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kubelantern-agent.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        # kubectl logs/exec deploy/kubelantern-agent -> the agent, not the sidecar
+        kubectl.kubernetes.io/default-container: agent
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "kubelantern-agent.name" . }}
+      # The Kubernetes API token is mounted explicitly into the agent container
+      # only (volume kube-api-access below), not into the notifier.
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: {{ include "kubelantern-agent.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: KUBELANTERN_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: KUBELANTERN_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            - name: KUBELANTERN_OUTPUT
+              value: {{ .Values.output | quote }}
+            - name: KUBELANTERN_LOG_LINES
+              value: {{ .Values.logLines | quote }}
+            - name: KUBELANTERN_RESOLVE_AFTER_SECONDS
+              value: {{ .Values.incidents.resolveAfterSeconds | quote }}
+            - name: KUBELANTERN_REMINDER_MINUTES
+              value: {{ .Values.incidents.reminderMinutes | quote }}
+            - name: KUBELANTERN_INCIDENT_STORE
+              value: {{ .Values.incidents.persist | toString | quote }}
+            - name: KUBELANTERN_INCIDENT_HISTORY
+              value: {{ .Values.incidents.history | quote }}
+            - name: KUBELANTERN_INCIDENT_RETENTION_DAYS
+              value: {{ .Values.incidents.retentionDays | quote }}
+            {{- with .Values.maintenance }}
+            - name: KUBELANTERN_MAINTENANCE_PAUSED
+              value: {{ .paused | default false | toString | quote }}
+            - name: KUBELANTERN_MAINTENANCE_UNTIL
+              value: {{ .until | default "" | quote }}
+            - name: KUBELANTERN_MAINTENANCE_REASON
+              value: {{ .reason | default "" | quote }}
+            - name: KUBELANTERN_MAINTENANCE_SETTLE_SECONDS
+              value: {{ .settleSeconds | default 300 | quote }}
+            - name: KUBELANTERN_MAINTENANCE_MAX_HOURS
+              value: {{ .maxHours | default 12 | quote }}
+            - name: KUBELANTERN_MAINTENANCE_POLL_SECONDS
+              value: {{ .pollSeconds | default 30 | quote }}
+            {{- end }}
+            - name: KUBELANTERN_GATEWAY_URL
+              value: {{ .Values.gateway.url | quote }}
+            - name: KUBELANTERN_TOKEN_PATH
+              value: /var/run/secrets/kubelantern/token
+            - name: KUBELANTERN_RUNBOOK_SYNC_SECONDS
+              value: {{ .Values.runbooks.syncSeconds | quote }}
+            {{- if .Values.notifications.enabled }}
+            - name: KUBELANTERN_NOTIFY_URL
+              value: http://127.0.0.1:8081/v1/notify
+            - name: KUBELANTERN_NOTIFY_EVENTS
+              value: {{ join "," .Values.notifications.events | quote }}
+            - name: KUBELANTERN_NOTIFY_DETAIL
+              value: {{ .Values.notifications.detail | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: kube-api-access
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
+            - name: gateway-token
+              mountPath: /var/run/secrets/kubelantern
+              readOnly: true
+        {{- if .Values.notifications.enabled }}
+        # Notifier sidecar: the only container that can read the webhook URLs.
+        # Listens on 127.0.0.1 only; has no Kubernetes API token.
+        - name: notifier
+          image: {{ include "kubelantern-agent.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["kubelantern-notifier"]
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: KUBELANTERN_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            - name: KUBELANTERN_NOTIFY_CHANNELS
+              value: {{ join "," .Values.notifications.channels | quote }}
+            - name: KUBELANTERN_NOTIFY_DETAIL
+              value: {{ .Values.notifications.detail | quote }}
+            - name: KUBELANTERN_NOTIFY_MAX_PER_MINUTE
+              value: {{ .Values.notifications.maxPerMinute | quote }}
+            - name: KUBELANTERN_NOTIFY_ALLOW_INSECURE
+              value: {{ .Values.notifications.allowInsecure | toString | quote }}
+            - name: KUBELANTERN_NOTIFY_SECRET_DIR
+              value: /etc/kubelantern/notify
+            {{- if has "email" .Values.notifications.channels }}
+            {{- $email := .Values.notifications.email }}
+            - name: KUBELANTERN_NOTIFY_EMAIL_HOST
+              value: {{ required "notifications.email.smtpHost is required for the email channel" $email.smtpHost | quote }}
+            - name: KUBELANTERN_NOTIFY_EMAIL_PORT
+              value: {{ $email.smtpPort | quote }}
+            - name: KUBELANTERN_NOTIFY_EMAIL_FROM
+              value: {{ required "notifications.email.from is required for the email channel" $email.from | quote }}
+            - name: KUBELANTERN_NOTIFY_EMAIL_TO
+              value: {{ required "notifications.email.to is required for the email channel" (join "," $email.to) | quote }}
+            - name: KUBELANTERN_NOTIFY_EMAIL_TLS
+              value: {{ $email.tls | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.notifications.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: notify-secret
+              mountPath: /etc/kubelantern/notify
+              readOnly: true
+        {{- end }}
+      volumes:
+        # Standard API credentials, projected by the kubelet (same as automount),
+        # mounted into the agent container only.
+        - name: kube-api-access
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3607
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+              - downwardAPI:
+                  items:
+                    - path: namespace
+                      fieldRef:
+                        fieldPath: metadata.namespace
+        {{- if .Values.notifications.enabled }}
+        - name: notify-secret
+          secret:
+            secretName: {{ required "notifications.existingSecret is required" .Values.notifications.existingSecret }}
+            # Missing Secret: the agent still runs; the notifier logs "no webhook URL".
+            optional: true
+        {{- end }}
+        # Short-lived token valid ONLY for the gateway (audience-bound), rotated by
+        # the kubelet. It is useless against the Kubernetes API.
+        - name: gateway-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  audience: {{ .Values.gateway.audience | quote }}
+                  expirationSeconds: {{ .Values.gateway.tokenExpirationSeconds }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

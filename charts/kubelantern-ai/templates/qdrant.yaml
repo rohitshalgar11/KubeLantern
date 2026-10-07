@@ -1,0 +1,97 @@
+{{- if .Values.qdrant.enabled }}
+{{- $q := .Values.qdrant }}
+{{- if $q.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qdrant-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: qdrant
+    {{- include "kubelantern-ai.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with $q.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $q.persistence.size }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qdrant
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: qdrant
+    {{- include "kubelantern-ai.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: qdrant
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: qdrant
+        {{- include "kubelantern-ai.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: qdrant
+          image: {{ $q.image.repository }}:{{ $q.image.tag }}
+          imagePullPolicy: {{ $q.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 6333
+          env:
+            - name: QDRANT__TELEMETRY_DISABLED
+              value: "true"
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          resources:
+            {{- toYaml $q.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /qdrant/storage
+      volumes:
+        - name: data
+          {{- if $q.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: qdrant-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with $q.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $q.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $q.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: qdrant
+    {{- include "kubelantern-ai.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: qdrant
+  ports:
+    - name: http
+      port: 6333
+      targetPort: http
+{{- end }}

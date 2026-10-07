@@ -1,0 +1,54 @@
+# Exercises every optional template (used by CI: helm lint / template / kubeconform).
+incidents:
+  resolveAfterSeconds: 120
+  history: 20
+  retentionDays: 7
+  viewers:
+    groups: ["demo-developers"]
+runbooks:
+  items:
+    - name: broken-app-database
+      title: broken-app cannot reach its database
+      category: dependency
+      workloads: ["broken-app"]
+      content: |
+        # Our setup
+        broken-app uses the Service `db` on port 5432.
+
+            kubectl apply -f examples/demo-db.yaml
+
+        # Owner
+        demo team — Slack #demo-team-oncall
+  editors:
+    groups: ["demo-developers"]
+    users: ["alice@example.com"]
+notifications:
+  enabled: true
+  existingSecret: demo-notify
+  channels: ["teams", "slack", "webhook", "email"]
+  email:
+    to: ["a1b2c3d4.example.onmicrosoft.com@emea.teams.ms"]
+    from: kubelantern@example.com
+    smtpHost: smtp.azurecomm.net
+  events: ["opened", "diagnosis", "resolved"]
+  detail: full
+  egressCidrs: ["52.0.0.0/8"]
+networkPolicy:
+  egress:
+    enabled: true
+    apiServer:
+      cidrs: ["172.18.0.0/16"]
+podAnnotations:
+  example.com/team: demo
+tolerations:
+  - key: dedicated
+    operator: Equal
+    value: platform
+    effect: NoSchedule
+maintenance:
+  paused: true
+  until: "2026-10-07T22:00:00Z"
+  reason: "AKS upgrade 1.30 -> 1.31"
+  settleSeconds: 120
+  maxHours: 6
+  pollSeconds: 15

@@ -1,0 +1,11 @@
+# Local kind cluster: images are built and loaded by `make load`, not pulled.
+gateway:
+  image:
+    repository: kubelantern-gateway
+    tag: dev
+    pullPolicy: IfNotPresent
+sharedRunbooks:
+  # Platform-owned runbooks kept outside the chart (see examples/shared-runbooks).
+  # Optional: the gateway starts without it. `make test-kb` creates and removes it.
+  existingConfigMaps: [kubelantern-runbooks-platform]
+  reloadSeconds: 10

@@ -1,0 +1,11 @@
+# Simulates a shared-cluster namespace with default-deny egress
+# (`make egress-lockdown NS=demo`). Applied with -n <namespace>.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  labels:
+    app.kubernetes.io/part-of: kubelantern-demo
+spec:
+  podSelector: {}
+  policyTypes: ["Egress"]

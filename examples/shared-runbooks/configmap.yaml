@@ -1,0 +1,36 @@
+# Your platform team's own shared runbooks, kept in your Git repo and synced by
+# ArgoCD (or applied with kubectl). One key per runbook: "<name>.md".
+#
+# Point the kubelantern-ai chart at it once:
+#   sharedRunbooks:
+#     existingConfigMaps: [kubelantern-runbooks-platform]
+# After that, edit this file and sync: the gateway picks up changes within
+# about a minute (kubelet refresh + sharedRunbooks.reloadSeconds). No image
+# rebuild, no restart. A runbook with the same name as a built-in one replaces it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubelantern-runbooks-platform
+  namespace: kubelantern-ai
+data:
+  platform-postgres.md: |
+    ---
+    title: Connecting to the platform's managed PostgreSQL
+    category: dependency
+    ---
+    # Symptoms
+    Applications cannot connect to `*.postgres.database.azure.com`:
+    `connection timed out`, `no pg_hba.conf entry`, or
+    `FATAL: password authentication failed`.
+
+    # What to check
+    1. Is the database's private endpoint DNS name used (not the public one)?
+    2. Does the namespace's egress NetworkPolicy allow TCP 5432 to the database subnet?
+    3. Credentials come from Key Vault through External Secrets: is the ExternalSecret Ready?
+
+    # Fix
+    Use the private host name from the platform catalogue, request the egress rule
+    with a platform ticket, and fix the ExternalSecret if it is not Ready.
+
+    # Escalation
+    Platform team — Teams channel "Platform Support"

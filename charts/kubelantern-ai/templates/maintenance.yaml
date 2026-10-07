@@ -1,0 +1,16 @@
+{{- $m := .Values.maintenance | default dict }}
+# Cluster-wide maintenance switch (e.g. during a cluster upgrade). Every agent
+# polls the gateway for it; while paused they open no new incidents, run no
+# diagnoses and send no notifications. See docs/maintenance.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubelantern-maintenance
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kubelantern-maintenance
+    {{- include "kubelantern-ai.labels" . | nindent 4 }}
+data:
+  paused: {{ $m.paused | default false | toString | quote }}
+  until: {{ $m.until | default "" | quote }}
+  reason: {{ $m.reason | default "" | quote }}

@@ -1,0 +1,35 @@
+# Exercises every optional template (used by CI: helm lint / template / kubeconform).
+gateway:
+  model: qwen2.5:3b
+  podAnnotations:
+    example.com/owner: platform
+ollama:
+  persistence:
+    storageClass: managed-csi
+networkPolicy:
+  egress:
+    enabled: true
+    apiServer:
+      cidrs: ["10.0.0.1/32"]
+maintenance:
+  paused: true
+  until: "2026-10-07T22:00:00Z"
+  reason: "AKS upgrade 1.30 -> 1.31"
+sharedRunbooks:
+  exclude: [kafka-connection-errors]
+  extra:
+    platform-postgres: |
+      ---
+      title: Connecting to the platform PostgreSQL
+      category: dependency
+      ---
+      # Symptoms
+      connection timed out to *.postgres.database.azure.com
+    redis-errors: |
+      ---
+      title: Our Redis (replaces the built-in runbook)
+      ---
+      # Symptoms
+      READONLY You can't write against a read only replica.
+  existingConfigMaps: [kubelantern-runbooks-platform, team-sre-runbooks]
+  reloadSeconds: 60

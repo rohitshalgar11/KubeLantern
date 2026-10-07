@@ -1,0 +1,329 @@
+[
+ {
+  "name": "missing-service",
+  "expect": "dependency-missing-service",
+  "log": "INFO starting\nFATAL: cannot connect to database at db:5432\n",
+  "deps": [
+   {
+    "host": "db",
+    "port": 5432,
+    "scope": "namespace",
+    "service": "db",
+    "service_exists": false
+   }
+  ]
+ },
+ {
+  "name": "wrong-port",
+  "expect": "dependency-unhealthy-service",
+  "log": "ERROR dial tcp redis:6380: connect: connection refused\n",
+  "deps": [
+   {
+    "host": "redis",
+    "port": 6380,
+    "scope": "namespace",
+    "service": "redis",
+    "service_exists": true,
+    "service_ports": [
+     6379
+    ],
+    "port_exposed": false,
+    "ready_endpoints": 1
+   }
+  ]
+ },
+ {
+  "name": "oom",
+  "expect": "oomkilled",
+  "family": "oom",
+  "exit_code": 137,
+  "cause": "oom (exit 137)",
+  "reason": "OOMKilled",
+  "log": "loading 2GB dataset into memory\n"
+ },
+ {
+  "name": "image-not-found",
+  "expect": "image-pull",
+  "family": "image-pull",
+  "exit_code": null,
+  "cause": "image-pull",
+  "reason": "ImagePullBackOff",
+  "events": [
+   "Failed to pull image \"registry.example.com/web:1.99\": manifest unknown"
+  ]
+ },
+ {
+  "name": "missing-env",
+  "expect": "configuration-error",
+  "log": "FATAL: environment variable DATABASE_URL is not set\n"
+ },
+ {
+  "name": "liveness",
+  "expect": "probe-failures",
+  "exit_code": 137,
+  "cause": "crash (exit 137)",
+  "log": "INFO serving on :8080\n",
+  "events": [
+   "Liveness probe failed: HTTP probe failed with statuscode: 404"
+  ]
+ },
+ {
+  "name": "generic-bug",
+  "expect": "application-error",
+  "exit_code": 2,
+  "log": "Traceback (most recent call last):\n  File \"/app/main.py\", line 10, in <module>\n    total = items[0]['price'] / count\nZeroDivisionError: division by zero\n"
+ },
+ {
+  "name": "wrong-arch",
+  "expect": "image-wrong-architecture",
+  "exit_code": 255,
+  "log": "exec /app/server: exec format error\n"
+ },
+ {
+  "name": "entrypoint",
+  "expect": "entrypoint-not-found",
+  "exit_code": 128,
+  "reason": "RunContainerError",
+  "message": "failed to create containerd task: exec: \"gunicorn\": executable file not found in $PATH: unknown"
+ },
+ {
+  "name": "missing-secret",
+  "expect": "missing-configmap-or-secret",
+  "family": "config",
+  "exit_code": null,
+  "cause": "config (CreateContainerConfigError)",
+  "reason": "CreateContainerConfigError",
+  "message": "secret \"db-credentials\" not found"
+ },
+ {
+  "name": "missing-key",
+  "expect": "missing-configmap-or-secret",
+  "family": "config",
+  "exit_code": null,
+  "cause": "config (CreateContainerConfigError)",
+  "reason": "CreateContainerConfigError",
+  "message": "couldn't find key DB_PASSWORD in Secret orders/db-credentials"
+ },
+ {
+  "name": "mounted-file",
+  "expect": "mounted-file-missing",
+  "log": "Error: open /etc/app/config.yaml: no such file or directory\n"
+ },
+ {
+  "name": "evicted-memory",
+  "expect": "evicted-node-pressure",
+  "family": "evicted",
+  "exit_code": null,
+  "cause": "evicted",
+  "reason": "Evicted",
+  "message": "The node was low on resource: memory. Container api was using 1200Mi, request is 256Mi."
+ },
+ {
+  "name": "evicted-disk",
+  "expect": "evicted-node-pressure",
+  "family": "evicted",
+  "exit_code": null,
+  "cause": "evicted",
+  "reason": "Evicted",
+  "message": "Pod ephemeral local storage usage exceeds the total limit of containers 1Gi."
+ },
+ {
+  "name": "dns",
+  "expect": "dns-resolution-failure",
+  "log": "Error: getaddrinfo EAI_AGAIN api.partner.example.com\n    at GetAddrInfoReqWrap.onlookup [as oncomplete] (node:dns:107:26)\n"
+ },
+ {
+  "name": "dns-timeout",
+  "expect": "dns-resolution-failure",
+  "log": "dial tcp: lookup orders-db on 10.96.0.10:53: read udp 10.244.1.5:41000->10.96.0.10:53: i/o timeout\n"
+ },
+ {
+  "name": "netpol",
+  "expect": "networkpolicy-blocking",
+  "log": "ERROR dial tcp 10.0.12.7:5432: i/o timeout\n",
+  "deps": [
+   {
+    "host": "orders-db",
+    "port": 5432,
+    "scope": "namespace",
+    "service": "orders-db",
+    "service_exists": true,
+    "service_ports": [
+     5432
+    ],
+    "port_exposed": true,
+    "ready_endpoints": 2
+   }
+  ]
+ },
+ {
+  "name": "egress-external",
+  "expect": "external-dependency-unreachable",
+  "log": "psycopg2.OperationalError: could not connect to server: Connection timed out\n\tIs the server running on host \"orders.postgres.database.azure.com\" (52.1.2.3) and accepting TCP/IP connections on port 5432?\n"
+ },
+ {
+  "name": "readonly-fs",
+  "expect": "readonly-root-filesystem",
+  "log": "nginx: [emerg] mkdir() \"/var/cache/nginx/client_temp\" failed (30: Read-only file system)\n"
+ },
+ {
+  "name": "nonroot-port",
+  "expect": "permission-denied-non-root",
+  "log": "listen tcp :80: bind: permission denied\n"
+ },
+ {
+  "name": "k8s-forbidden",
+  "expect": "kubernetes-api-forbidden",
+  "log": "pods is forbidden: User \"system:serviceaccount:orders:default\" cannot list resource \"pods\" in API group \"\" in the namespace \"orders\"\n"
+ },
+ {
+  "name": "init-failure",
+  "expect": "init-container-failure",
+  "log": "Init container db-migrate failed: Init:CrashLoopBackOff\nwaiting for init container to complete\n",
+  "reason": "CrashLoopBackOff",
+  "message": "back-off restarting failed init container db-migrate"
+ },
+ {
+  "name": "exit-127",
+  "expect": "entrypoint-not-found",
+  "exit_code": 127,
+  "log": "/bin/sh: 1: start-server: not found\n"
+ },
+ {
+  "name": "segfault",
+  "expect": "segmentation-fault",
+  "exit_code": 139,
+  "cause": "crash (exit 139)",
+  "log": "Segmentation fault (core dumped)\n"
+ },
+ {
+  "name": "slow-start",
+  "expect": "slow-startup-killed",
+  "exit_code": 137,
+  "cause": "crash (exit 137)",
+  "log": "INFO Starting application\nINFO Loading caches, this can take a few minutes\n",
+  "events": [
+   "Startup probe failed: Get \"http://10.244.0.9:8080/health\": dial tcp 10.244.0.9:8080: connect: connection refused"
+  ]
+ },
+ {
+  "name": "java-heap",
+  "expect": "java-heap-out-of-memory",
+  "log": "Exception in thread \"main\" java.lang.OutOfMemoryError: Java heap space\n\tat java.base/java.util.Arrays.copyOf(Arrays.java:3512)\n\tat com.example.Loader.load(Loader.java:42)\n"
+ },
+ {
+  "name": "java-class-version",
+  "expect": "java-class-loading-errors",
+  "log": "Error: LinkageError occurred while loading main class com.example.App\n\tjava.lang.UnsupportedClassVersionError: com/example/App has been compiled by a more recent version of the Java Runtime (class file version 65.0), this version of the Java Runtime only recognizes class file versions up to 61.0\n"
+ },
+ {
+  "name": "spring-datasource",
+  "expect": "spring-boot-startup-failure",
+  "log": "***************************\nAPPLICATION FAILED TO START\n***************************\n\nDescription:\n\nFailed to configure a DataSource: 'url' attribute is not specified and no embedded datasource could be configured.\n\nAction:\n\nConsider the following: If you want an embedded database please put it on the classpath.\n"
+ },
+ {
+  "name": "python-module",
+  "expect": "python-import-errors",
+  "log": "Traceback (most recent call last):\n  File \"/app/main.py\", line 3, in <module>\n    import requests\nModuleNotFoundError: No module named 'requests'\n"
+ },
+ {
+  "name": "gunicorn-timeout",
+  "expect": "python-worker-timeout",
+  "log": "[2026-10-07 10:00:01 +0000] [1] [CRITICAL] WORKER TIMEOUT (pid:42)\n[2026-10-07 10:00:01 +0000] [1] [ERROR] Worker (pid:42) was sent SIGKILL! Perhaps out of memory?\n"
+ },
+ {
+  "name": "node-module",
+  "expect": "node-module-not-found",
+  "log": "node:internal/modules/cjs/loader:1080\n  throw err;\n  ^\n\nError: Cannot find module 'express'\nRequire stack:\n- /usr/src/app/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1077:15)\n  code: 'MODULE_NOT_FOUND',\n"
+ },
+ {
+  "name": "node-heap",
+  "expect": "node-heap-out-of-memory",
+  "exit_code": 134,
+  "cause": "crash (exit 134)",
+  "log": "<--- Last few GCs --->\nFATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\n 1: 0xb7b3e0 node::Abort() [node]\n"
+ },
+ {
+  "name": "go-nil",
+  "expect": "go-panic",
+  "exit_code": 2,
+  "log": "panic: runtime error: invalid memory address or nil pointer dereference\n[signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x6b1c2a]\n\ngoroutine 1 [running]:\nmain.(*Server).Start(0x0)\n\t/app/server.go:57 +0x2a\n"
+ },
+ {
+  "name": "dotnet-framework",
+  "expect": "dotnet-startup-failure",
+  "exit_code": 150,
+  "cause": "crash (exit 150)",
+  "log": "You must install or update .NET to run this application.\n\nApp: /app/Orders.Api.dll\nFramework: 'Microsoft.AspNetCore.App', version '8.0.0' (x64)\n.NET location: /usr/share/dotnet/\n\nThe following frameworks were found:\n  6.0.25 at [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]\n"
+ },
+ {
+  "name": "port-in-use",
+  "expect": "address-already-in-use",
+  "log": "Error: listen EADDRINUSE: address already in use :::3000\n    at Server.setupListenHandle [as _listen2] (node:net:1817:16)\n"
+ },
+ {
+  "name": "tls-unknown-ca",
+  "expect": "tls-certificate-errors",
+  "log": "Get \"https://api.internal.example.com/v1/orders\": tls: failed to verify certificate: x509: certificate signed by unknown authority\n"
+ },
+ {
+  "name": "tls-pkix",
+  "expect": "tls-certificate-errors",
+  "log": "javax.net.ssl.SSLHandshakeException: PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target\n"
+ },
+ {
+  "name": "pg-auth",
+  "expect": "database-authentication-failed",
+  "log": "psycopg2.OperationalError: connection to server at \"orders-db\" (10.0.3.4), port 5432 failed: FATAL:  password authentication failed for user \"orders\"\n"
+ },
+ {
+  "name": "mysql-auth",
+  "expect": "database-authentication-failed",
+  "log": "SQLSTATE[HY000] [1045] Access denied for user 'orders'@'10.244.2.17' (using password: YES)\n"
+ },
+ {
+  "name": "pg-too-many",
+  "expect": "database-connection-exhausted",
+  "log": "FATAL: sorry, too many clients already\n"
+ },
+ {
+  "name": "hikari",
+  "expect": "database-connection-exhausted",
+  "log": "java.sql.SQLTransientConnectionException: HikariPool-1 - Connection is not available, request timed out after 30000ms.\n\tat com.zaxxer.hikari.pool.HikariPool.createTimeoutException(HikariPool.java:696)\n"
+ },
+ {
+  "name": "flyway",
+  "expect": "database-migration-failure",
+  "log": "org.flywaydb.core.api.FlywayException: Validate failed: Migrations have failed validation\nDetected failed migration to version 12 (add orders index).\n"
+ },
+ {
+  "name": "redis-readonly",
+  "expect": "redis-errors",
+  "log": "redis.exceptions.ReadOnlyError: READONLY You can't write against a read only replica.\n"
+ },
+ {
+  "name": "kafka-metadata",
+  "expect": "kafka-connection-errors",
+  "log": "org.apache.kafka.common.errors.TimeoutException: Topic orders not present in metadata after 60000 ms.\n"
+ },
+ {
+  "name": "upstream-429",
+  "expect": "http-upstream-errors",
+  "log": "ERROR payment provider returned 429 Too Many Requests: rate limit exceeded, retry after 30s\n"
+ },
+ {
+  "name": "yaml-parse",
+  "expect": "config-file-parse-error",
+  "log": "panic: failed to load config: yaml: line 12: mapping values are not allowed in this context\n"
+ },
+ {
+  "name": "disk-full",
+  "expect": "disk-full",
+  "log": "ERROR could not write to file \"pg_wal/xlogtemp.42\": No space left on device\n"
+ },
+ {
+  "name": "too-many-files",
+  "expect": "too-many-open-files",
+  "log": "2026/10/07 10:00:00 http: Accept error: accept tcp [::]:8080: accept4: too many open files; retrying in 1s\n"
+ }
+]

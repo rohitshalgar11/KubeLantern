@@ -1,0 +1,40 @@
+{{- $sr := .Values.sharedRunbooks | default dict }}
+{{- if $sr.builtin }}
+# The shared runbook library shipped with the chart (runbooks/*.md). Mounted into
+# the gateway, which re-reads it when it changes: no image rebuild, no restart.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubelantern-runbooks-builtin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kubelantern-runbooks
+    kubelantern.io/runbooks: builtin
+    {{- include "kubelantern-ai.labels" . | nindent 4 }}
+data:
+  {{- range $path, $_ := .Files.Glob "runbooks/*.md" }}
+  {{- $name := base $path | trimSuffix ".md" }}
+  {{- if not (has $name ($sr.exclude | default list)) }}
+  {{ base $path }}: |-
+{{ $.Files.Get $path | trimSuffix "\n" | indent 4 }}
+  {{- end }}
+  {{- end }}
+{{- end }}
+{{- if $sr.extra }}
+---
+# Your own shared runbooks from `sharedRunbooks.extra`.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubelantern-runbooks-custom
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kubelantern-runbooks
+    kubelantern.io/runbooks: custom
+    {{- include "kubelantern-ai.labels" . | nindent 4 }}
+data:
+  {{- range $name, $content := $sr.extra }}
+  {{ $name }}.md: |-
+{{ $content | trimSuffix "\n" | indent 4 }}
+  {{- end }}
+{{- end }}

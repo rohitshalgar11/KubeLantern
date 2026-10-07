@@ -1,0 +1,166 @@
+# KubeLantern agent — one release per namespace you want covered.
+#
+# The namespace must carry the label  kubelantern.io/enabled: "true"
+# (that is what the gateway's NetworkPolicy admits). This chart does not own
+# your Namespace object, so set the label wherever you create namespaces.
+
+image:
+  repository: ghcr.io/rohitshalgar11/kubelantern-agent
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Where the KubeLantern gateway runs (installed by the kubelantern-ai chart).
+gateway:
+  # Empty url = run without AI diagnosis (detection, incidents and evidence only).
+  url: http://kubelantern-gateway.kubelantern-ai.svc:8080
+  # Must match the gateway's expected token audience.
+  audience: kubelantern-gateway
+  # Used only by the egress NetworkPolicy below.
+  namespace: kubelantern-ai
+  port: 8080
+  # Lifetime of the projected token the agent presents to the gateway.
+  tokenExpirationSeconds: 3600
+
+incidents:
+  # A failing workload must stay healthy this long before RESOLVED.
+  resolveAfterSeconds: 300
+  # Re-post ONGOING for incidents still failing after this long.
+  reminderMinutes: 30
+  # Persist incidents as Incident objects in this namespace (needs the Incident
+  # CRD from the kubelantern-ai chart). They survive agent restarts and give
+  # the team a history: kubectl get incidents. false = memory only (agent then writes nothing).
+  persist: true
+  # Resolved incidents to keep, and the maximum age of a resolved incident.
+  history: 50
+  retentionDays: 30
+  # Let these groups/users read Incidents in this namespace (namespaced Role).
+  viewers:
+    groups: []
+    users: []
+
+runbooks:
+  # How often the agent pushes this namespace's Runbook objects to the gateway.
+  # 0 disables team runbooks for this namespace.
+  syncSeconds: 30
+
+  # Team runbooks to create in this namespace (optional). Teams can also keep
+  # Runbook objects in their own application repos instead.
+  # - name: payments-database
+  #   title: payments-api cannot reach its database
+  #   category: dependency          # optional
+  #   workloads: ["payments-api"]   # optional
+  #   content: |
+  #     # Our setup
+  #     ...
+  #     # Owner
+  #     payments team — Teams channel "Payments On-call"
+  items: []
+
+  # Let these groups/users create and edit Runbook objects in this namespace
+  # (namespaced Role + RoleBinding; nothing cluster-wide).
+  editors:
+    groups: []
+    users: []
+
+# Notifications to Microsoft Teams, Slack or a generic webhook (Stage 9).
+# Off by default: a chat message leaves the cluster.
+notifications:
+  enabled: false
+  # Secret in THIS namespace holding the credentials, one key per item:
+  #   teams         = Teams Workflows URL ("Post to a channel when a webhook request is received")
+  #   slack         = Slack incoming-webhook URL
+  #   webhook       = any HTTPS endpoint receiving KubeLantern JSON
+  #   smtp-username / smtp-password = SMTP login for the email channel (optional for relays)
+  # Create it with your usual tool (External Secrets, Sealed Secrets, kubectl...).
+  # It is mounted only into the notifier container; the agent never sees it.
+  existingSecret: kubelantern-notify
+  # Where to post: teams | slack | webhook | email
+  channels: ["teams"]
+  # Email channel, e.g. to a Microsoft Teams channel's email address
+  # (Teams: channel ⋯ > Get email address). Any SMTP service works.
+  email:
+    to: []                 # e.g. ["a1b2c3d4.yourtenant.onmicrosoft.com@emea.teams.ms"]
+    from: ""               # sender address your SMTP service may send as
+    smtpHost: ""           # e.g. smtp.azurecomm.net, your relay, smtp.sendgrid.net
+    smtpPort: 587
+    tls: starttls          # starttls (587) | ssl (465) | none (testing only)
+  # When to post. diagnosis = when the cause is known (includes "diagnosis
+  # unavailable" if the AI fails); resolved = when it's over. Also available:
+  # opened, cause_changed, scope_changed, ongoing. Without AI (gateway.url empty),
+  # "opened" is sent automatically.
+  events: ["diagnosis", "resolved"]
+  # summary = cause, next steps, escalation. full = also evidence and log lines
+  # (redacted) — more data leaves the cluster.
+  detail: summary
+  # Upper limit of messages per minute from this namespace.
+  maxPerMinute: 20
+  # Allow http:// webhooks and SMTP without TLS (testing only).
+  allowInsecure: false
+  # With networkPolicy.egress.enabled: where the notifier may connect on 443
+  # (and on email.smtpPort when the email channel is on).
+  # Empty = any destination. (NetworkPolicy applies to the whole pod.)
+  egressCidrs: []
+  resources:
+    requests:
+      cpu: 5m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 96Mi
+
+# For namespaces with a default-deny EGRESS policy: allow exactly what the
+# agent needs — DNS, the Kubernetes API server and the KubeLantern gateway.
+# Maintenance mode (e.g. during a cluster upgrade): no new incidents, no
+# diagnoses, no notifications. Incidents already open are still tracked
+# silently. The cluster-wide switch lives in the kubelantern-ai chart
+# (`maintenance.*`); this one pauses only this namespace.
+maintenance:
+  paused: false
+  # End time, RFC 3339 UTC, e.g. "2026-10-07T22:00:00Z" (recommended).
+  until: ""
+  reason: ""
+  # After a pause ends, stay quiet this long so pods can come back, then
+  # re-check every pod; only what is still failing becomes an incident.
+  settleSeconds: 300
+  # A pause without `until` ends after this many hours anyway.
+  maxHours: 12
+  # How often to ask the gateway for the cluster-wide switch.
+  pollSeconds: 30
+
+networkPolicy:
+  egress:
+    enabled: false
+    dns:
+      namespace: kube-system
+      podLabels:
+        k8s-app: kube-dns
+    apiServer:
+      # Lock the API server rule to these CIDRs (recommended in production), e.g.
+      # your AKS API server IP as "20.1.2.3/32". Empty = the listed ports to any
+      # destination (needed when the API server address is not known up front).
+      cidrs: []
+      ports: [443, 6443]
+
+logLevel: INFO
+# text = human-readable summary; json = full evidence bundle per event.
+output: text
+# Log lines shown in the text output.
+logLines: 5
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""

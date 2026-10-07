@@ -1,0 +1,177 @@
+{{- $gw := .Values.gateway }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubelantern-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kubelantern-gateway
+    {{- include "kubelantern-ai.labels" . | nindent 4 }}
+---
+# The gateway's ONLY cluster permission: verify agent tokens (TokenReview).
+# It never reads cluster objects — agents push evidence and runbooks to it.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubelantern-gateway-auth-delegator-{{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kubelantern-gateway
+    {{- include "kubelantern-ai.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: kubelantern-gateway
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubelantern-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kubelantern-gateway
+    {{- include "kubelantern-ai.labels" . | nindent 4 }}
+spec:
+  # One replica: rate limits and the model slot are per process.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kubelantern-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubelantern-gateway
+        {{- include "kubelantern-ai.labels" . | nindent 8 }}
+      {{- with $gw.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: kubelantern-gateway
+      volumes:
+        # Cluster-wide maintenance switch. Mounted (not read via the API), so the
+        # gateway needs no extra RBAC; the kubelet refreshes it within ~1 minute.
+        - name: maintenance
+          configMap:
+            name: kubelantern-maintenance
+            optional: true
+        {{- $sr := .Values.sharedRunbooks | default dict }}
+        # Shared runbooks, one folder per ConfigMap (later folders override earlier
+        # ones with the same runbook name). Re-read every `reloadSeconds`.
+        {{- if $sr.builtin }}
+        - name: runbooks-builtin
+          configMap:
+            name: kubelantern-runbooks-builtin
+        {{- end }}
+        {{- if $sr.extra }}
+        - name: runbooks-custom
+          configMap:
+            name: kubelantern-runbooks-custom
+        {{- end }}
+        {{- range $i, $cm := $sr.existingConfigMaps }}
+        - name: runbooks-cm-{{ $i }}
+          configMap:
+            name: {{ $cm }}
+            optional: true
+        {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gateway
+          image: {{ $gw.image.repository }}:{{ $gw.image.tag | default .Chart.AppVersion }}
+          imagePullPolicy: {{ $gw.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $gw.port }}
+          env:
+            - name: PORT
+              value: {{ $gw.port | quote }}
+            - name: OLLAMA_URL
+              value: {{ include "kubelantern-ai.ollamaUrl" . | quote }}
+            - name: KUBELANTERN_MODEL
+              value: {{ $gw.model | quote }}
+            - name: KUBELANTERN_EMBED_MODEL
+              value: {{ $gw.embedModel | quote }}
+            - name: KUBELANTERN_PULL_MODEL
+              value: {{ $gw.pullModels | toString | quote }}
+            - name: KUBELANTERN_AUDIENCE
+              value: {{ $gw.audience | quote }}
+            - name: KUBELANTERN_RATE_PER_MINUTE
+              value: {{ $gw.ratePerMinute | quote }}
+            - name: KUBELANTERN_RUNBOOK_MIN_SCORE
+              value: {{ $gw.runbookMinScore | quote }}
+            - name: QDRANT_URL
+              value: {{ include "kubelantern-ai.qdrantUrl" . | quote }}
+            - name: KUBELANTERN_SHARED_RUNBOOKS
+              value: /etc/kubelantern/runbooks
+            - name: KUBELANTERN_RUNBOOK_RELOAD_SECONDS
+              value: {{ $sr.reloadSeconds | default 30 | quote }}
+            - name: KUBELANTERN_LOG_LEVEL
+              value: {{ $gw.logLevel | quote }}
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: KUBELANTERN_MAINTENANCE_DIR
+              value: /etc/kubelantern/maintenance
+          volumeMounts:
+            - name: maintenance
+              mountPath: /etc/kubelantern/maintenance
+              readOnly: true
+            {{- if $sr.builtin }}
+            - name: runbooks-builtin
+              mountPath: /etc/kubelantern/runbooks/00-builtin
+              readOnly: true
+            {{- end }}
+            {{- if $sr.extra }}
+            - name: runbooks-custom
+              mountPath: /etc/kubelantern/runbooks/10-custom
+              readOnly: true
+            {{- end }}
+            {{- range $i, $cm := $sr.existingConfigMaps }}
+            - name: runbooks-cm-{{ $i }}
+              mountPath: /etc/kubelantern/runbooks/20-{{ $cm }}
+              readOnly: true
+            {{- end }}
+          readinessProbe:            # not Ready until the model is available
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          resources:
+            {{- toYaml $gw.resources | nindent 12 }}
+          securityContext:
+            {{- include "kubelantern-ai.restrictedContainer" . | nindent 12 }}
+      {{- with $gw.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $gw.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $gw.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubelantern-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kubelantern-gateway
+    {{- include "kubelantern-ai.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: kubelantern-gateway
+  ports:
+    - name: http
+      port: {{ $gw.port }}
+      targetPort: http

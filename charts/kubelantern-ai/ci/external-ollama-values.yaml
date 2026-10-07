@@ -1,0 +1,8 @@
+# Ollama runs elsewhere (e.g. a GPU node pool); no Qdrant; CRDs managed separately.
+ollama:
+  enabled: false
+  externalUrl: http://ollama.gpu-pool.svc:11434
+qdrant:
+  enabled: false
+crds:
+  install: false
