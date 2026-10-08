@@ -7,7 +7,9 @@
 KubeLantern watches each team's namespace, turns failing pods into clean
 incidents, gathers the evidence an SRE would look at, and returns a grounded
 diagnosis — complete with the team's own runbook steps and on-call contact —
-from a **local LLM running inside your cluster**.
+from the **AI model of your choice**: a local LLM running inside your cluster
+(the default, nothing leaves it), or Azure OpenAI, OpenAI, Anthropic Claude,
+Google Gemini or any OpenAI-compatible API.
 
 Each team sees only its own namespace: in Kubernetes RBAC, at the AI boundary,
 and in the knowledge base.
@@ -20,7 +22,7 @@ and in the knowledge base.
 Namespace = isolation boundary
 Agent     = namespace-scoped, reads workloads, writes only its incident records
 Gateway   = controlled AI boundary
-LLM       = shared, local, in-cluster
+LLM       = shared; local in-cluster by default, or a hosted model of your choice
 ```
 
 ## What it looks like
@@ -94,10 +96,11 @@ KUBERNETES CLUSTER
 │   │                      ┌───────────┴───────────┐                     │   │
 │   │                      ▼                       ▼                     │   │
 │   │           ┌────────────────────┐  ┌────────────────────┐           │   │
-│   │           │        RAG         │  │     Local LLM      │           │   │
-│   │           │       Qdrant       │  │       Ollama       │           │   │
-│   │           │  shared + own-ns   │  │    qwen2.5:1.5b    │           │   │
-│   │           │      runbooks      │  │    + embeddings    │           │   │
+│   │           │        RAG         │  │        LLM         │           │   │
+│   │           │       Qdrant       │  │  Ollama (local) or │           │   │
+│   │           │  shared + own-ns   │  │  Azure OpenAI /    │           │   │
+│   │           │      runbooks      │  │  OpenAI / Claude / │           │   │
+│   │           │                    │  │  Gemini / vLLM ... │           │   │
 │   │           └────────────────────┘  └────────────────────┘           │   │
 │   │                                                                    │   │
 │   └────────────────────────────────────────────────────────────────────┘   │
@@ -116,7 +119,7 @@ flowchart LR
     subgraph ai["kubelantern-ai (platform)"]
         gw["Gateway<br/><small>token identity · namespace stamping<br/>redaction · rate limits · audit</small>"]
         dg["Diagnosis graph<br/><small>rules → facts → runbooks →<br/>LLM → validate → finalize</small>"]
-        llm["Ollama<br/><small>local LLM</small>"]
+        llm["LLM<br/><small>Ollama (local, default) or<br/>Azure OpenAI · OpenAI · Claude ·<br/>Gemini · any OpenAI-compatible</small>"]
         q[("Qdrant<br/><small>runbooks, tagged by namespace</small>")]
         gw --> dg --> llm
         dg --> q
@@ -133,6 +136,8 @@ flowchart LR
 4. **Diagnose** — the gateway verifies who is calling, then a LangGraph pipeline
    classifies with rules, states verified facts, retrieves shared + team
    runbooks, asks the model, validates the answer and fixes contradictions.
+   The model is your choice — local or hosted — and the checks around it are
+   the same for every model ([AI providers](docs/ai-providers.md)).
 
 ## Why KubeLantern
 
@@ -159,6 +164,32 @@ flowchart LR
 
 See [how it compares](docs/comparison.md) with K8sGPT, HolmesGPT and kagent —
 including what KubeLantern does not do yet.
+
+## Supported AI models
+
+Pick one per cluster in the `kubelantern-ai` chart values; switching is a
+values change, no new images. The agents, isolation, rules and validation are
+the same for every model.
+
+| Provider (`llm.provider`) | Models | Data leaves the cluster | Tested |
+|---|---|---|---|
+| `ollama` *(default)* | any Ollama model, e.g. `qwen2.5:1.5b`, `qwen2.5:3b`, `llama3.1` | **no** | live, `make eval` 9/9 |
+| `openai` with a `baseUrl` | **Google Gemini**, Groq, Mistral, OpenRouter, vLLM, LiteLLM, LM Studio … (any OpenAI-compatible API) | to that service (or nowhere, for vLLM/LiteLLM in your cluster) | live with Gemini, `make eval` 9/9 |
+| `openai` | OpenAI GPT models, e.g. `gpt-4o-mini` | to OpenAI | connection and errors live; diagnosis unit-tested |
+| `azure-openai` | your Azure OpenAI deployments | to your Azure tenant | unit-tested |
+| `anthropic` | Claude models, e.g. `claude-haiku-4-5-20251001` | to Anthropic | unit-tested |
+
+```yaml
+# kubelantern-ai values — example: Azure OpenAI
+llm:
+  provider: azure-openai
+  model: gpt-4o-mini                          # your deployment name
+  baseUrl: https://<resource>.openai.azure.com
+  existingSecret: kubelantern-llm             # Secret with key api-key
+```
+
+How to choose, get keys, and set it up with Helm or ArgoCD:
+[docs/ai-providers.md](docs/ai-providers.md).
 
 ## Quick start
 

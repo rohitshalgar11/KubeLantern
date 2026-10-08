@@ -17,7 +17,7 @@ a different team, and isolation between teams is the first requirement.**
 | **[HolmesGPT](https://github.com/robusta-dev/holmesgpt)** (CNCF sandbox) | Agentic troubleshooting: the model plans and calls tools (kubectl, Prometheus, logs, many integrations) to investigate alerts and questions; supports runbooks and any OpenAI-compatible LLM. |
 | **[kagent](https://kagent.dev/)** (CNCF sandbox) | A framework for building and running AI agents inside Kubernetes as CRDs, with MCP tool servers; agents can analyze *and act* on the cluster. |
 | **Kubernetes MCP servers** | Expose Kubernetes operations as tools to an AI assistant (an IDE, a chat client). |
-| **KubeLantern** | Per-namespace agents that detect failures, build evidence and incidents, and get a grounded diagnosis from a shared, local model through an isolating gateway. Advisory only. |
+| **KubeLantern** | Per-namespace agents that detect failures, build evidence and incidents, and get a grounded diagnosis from a shared model — local by default, or a hosted one — through an isolating gateway. Advisory only. |
 
 ## Design differences
 
@@ -30,7 +30,7 @@ a different team, and isolation between teams is the first requirement.**
 | **Identity at the AI boundary** | the tool's own credentials | every request authenticated with an audience-bound ServiceAccount token; namespace taken from identity, mismatches rejected |
 | **Knowledge / runbooks** | global, configured by the operator | shared runbooks + **team runbooks isolated per namespace**, stored as namespaced CRs, filtered at retrieval and re-checked |
 | **Trigger** | on demand, or on an alert | continuous watch; **incident lifecycle** (open, cause change, scope change, resolve) with deduplication — one model call per real problem |
-| **Model** | mostly hosted LLM APIs, local optional | **local by default** (Ollama in-cluster); no data leaves the cluster |
+| **Model** | mostly hosted LLM APIs, local optional | **local by default** (Ollama in-cluster, no data leaves the cluster); optionally Azure OpenAI, OpenAI, Anthropic, Gemini or any OpenAI-compatible API |
 | **Reliability of answers** | depends on the model | rules + verified facts + validation around a small model; the model cannot override a rule-confident category |
 | **Actions** | some tools can change the cluster | **advisory**: never changes workloads; writes only its own incident records |
 
