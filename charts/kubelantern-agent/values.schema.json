@@ -26,7 +26,8 @@
         "audience": { "type": "string", "minLength": 1 },
         "namespace": { "type": "string", "minLength": 1 },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "tokenExpirationSeconds": { "type": "integer", "minimum": 600 }
+        "tokenExpirationSeconds": { "type": "integer", "minimum": 600 },
+        "timeoutSeconds": { "type": "integer", "minimum": 10, "maximum": 3600 }
       }
     },
     "incidents": {

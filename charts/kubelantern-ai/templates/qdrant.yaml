@@ -1,24 +1,6 @@
 {{- if .Values.qdrant.enabled }}
 {{- $q := .Values.qdrant }}
-{{- if $q.persistence.enabled }}
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: qdrant-data
-  namespace: {{ .Release.Namespace }}
-  labels:
-    app.kubernetes.io/name: qdrant
-    {{- include "kubelantern-ai.labels" . | nindent 4 }}
-spec:
-  accessModes: ["ReadWriteOnce"]
-  {{- with $q.persistence.storageClass }}
-  storageClassName: {{ . | quote }}
-  {{- end }}
-  resources:
-    requests:
-      storage: {{ $q.persistence.size }}
----
-{{- end }}
+{{- include "kubelantern-ai.storageObjects" (dict "root" $ "p" $q.persistence "name" "qdrant-data" "component" "qdrant") }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,6 +22,10 @@ spec:
         app.kubernetes.io/name: qdrant
         {{- include "kubelantern-ai.labels" . | nindent 8 }}
     spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: qdrant
           image: {{ $q.image.repository }}:{{ $q.image.tag }}
@@ -60,12 +46,7 @@ spec:
               mountPath: /qdrant/storage
       volumes:
         - name: data
-          {{- if $q.persistence.enabled }}
-          persistentVolumeClaim:
-            claimName: qdrant-data
-          {{- else }}
-          emptyDir: {}
-          {{- end }}
+          {{- include "kubelantern-ai.volumeSource" (dict "root" $ "p" $q.persistence "name" "qdrant-data" "component" "qdrant") | nindent 10 }}
       {{- with $q.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -1,9 +1,22 @@
 KubeLantern platform installed in namespace "{{ .Release.Namespace }}".
 
-{{- if and .Values.ollama.enabled .Values.gateway.pullModels }}
+{{- $l := .Values.llm | default dict }}
+{{- $e := .Values.embeddings | default dict }}
+{{- $lp := $l.provider | default "ollama" }}
+{{- $ep := $e.provider | default "ollama" }}
 
-The gateway pulls {{ .Values.gateway.model }} and {{ .Values.gateway.embedModel }} into Ollama on
-first start (about 1.3 GB with the default models). It becomes Ready when they are available:
+Diagnosis model:  {{ $lp }} / {{ $l.model | default .Values.gateway.model }}
+Embeddings:       {{ $ep }} / {{ $e.model | default .Values.gateway.embedModel }}
+{{- if or (ne $lp "ollama") (ne $ep "ollama") }}
+
+A hosted AI provider is configured: redacted incident evidence and runbook
+text are sent to it. The API key comes from Secret "{{ $l.existingSecret | default $e.existingSecret }}" (key api-key)
+in this namespace; the gateway is Ready once the key is there.
+{{- end }}
+{{- if and .Values.ollama.enabled .Values.gateway.pullModels (or (eq $lp "ollama") (eq $ep "ollama")) }}
+
+The gateway pulls the Ollama model(s) on first start (about 1.3 GB with the
+default models). It becomes Ready when they are available:
 
   kubectl -n {{ .Release.Namespace }} rollout status deploy/kubelantern-gateway --timeout=30m
 {{- end }}

@@ -208,7 +208,8 @@ what each one runs. On a real cluster you don't use `make` at all (see
 | `make deploy-agents` | the same for every namespace in `AGENT_NS` |
 | `make ai-up [MODEL=…]` | `helm upgrade --install` the `kubelantern-ai` chart (gateway, Ollama, Qdrant, CRDs) |
 | `make ai-down` | uninstall the AI part (agents and CRDs stay) |
-| `make ai-model MODEL=qwen2.5:3b` | switch the diagnosis model |
+| `make ai-model MODEL=qwen2.5:3b` | switch the local diagnosis model |
+| `make llm-key` / `ai-provider PROVIDER=… MODEL=…` / `ai-local` | use a hosted model (Azure OpenAI, OpenAI, Anthropic, OpenAI-compatible) / back to Ollama |
 | `make ai-pull MODEL=…` | pull a model into Ollama by hand |
 | `make runbooks-demo` | apply the example team runbook in `demo` |
 | `make onboard-runbooks NS=x GROUP=g` | let a team's group edit Runbooks in its namespace |
@@ -276,6 +277,7 @@ Agent (env on `deploy/kubelantern-agent`):
 | Variable | Default | Meaning |
 |---|---|---|
 | `KUBELANTERN_GATEWAY_URL` | *(empty = no AI)* | gateway URL |
+| `KUBELANTERN_GATEWAY_TIMEOUT_SECONDS` | 240 | wait for one diagnosis |
 | `KUBELANTERN_TOKEN_PATH` | `/var/run/secrets/kubelantern/token` | projected token |
 | `KUBELANTERN_RESOLVE_AFTER_SECONDS` | 300 (kind values: 120) | healthy window before RESOLVED |
 | `KUBELANTERN_REMINDER_MINUTES` | 30 | ONGOING reminder interval |
@@ -304,6 +306,9 @@ Gateway (env on `deploy/kubelantern-gateway`):
 | `KUBELANTERN_RUNBOOK_MIN_SCORE` | 0.35 | minimum similarity for a runbook |
 | `KUBELANTERN_SHARED_RUNBOOKS` | `/etc/kubelantern/runbooks` | shared runbooks: `*.md` here and in sub-folders (one per mounted ConfigMap) |
 | `KUBELANTERN_RUNBOOK_RELOAD_SECONDS` | 30 (kind: 10) | check shared runbooks for changes; 0 = load once |
+| `KUBELANTERN_LLM_PROVIDER` / `_BASE_URL` / `_API_VERSION` / `_KEY_FILE` | `ollama` | diagnosis model provider ([ai-providers.md](ai-providers.md)) |
+| `KUBELANTERN_LLM_TIMEOUT_SECONDS` / `_MAX_TOKENS` / `KUBELANTERN_MAX_CONCURRENCY` | 180 / 1000 / 1 | per call, answer length, parallel diagnoses |
+| `KUBELANTERN_EMBED_PROVIDER` / `_BASE_URL` / `_API_VERSION` / `_KEY_FILE` | `ollama` | embeddings provider |
 | `KUBELANTERN_MAINTENANCE_DIR` | `/etc/kubelantern/maintenance` | mounted cluster-wide maintenance switch |
 
 ## Troubleshooting

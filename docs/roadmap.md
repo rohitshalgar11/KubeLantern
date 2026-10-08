@@ -55,6 +55,11 @@ shipped as a ConfigMap; platform runbooks from your own ConfigMaps; live reload
 without an image rebuild or restart; overrides and exclusions; a test case per
 runbook (`make kb-check`, `make test-kb`).
 
+Any AI model ([docs](ai-providers.md)): besides the local Ollama, Azure OpenAI,
+OpenAI and every OpenAI-compatible API (vLLM, LiteLLM, Gemini, Groq, …), and
+Anthropic, with an API key in a Secret mounted only into the gateway. Embeddings
+configurable separately; one vector collection per embedding model.
+
 Maintenance mode ([docs](maintenance.md)): a cluster-wide switch (`kubelantern-ai`
 chart) and a per-namespace switch (agent chart) pause new incidents, diagnoses
 and alerts during planned work such as a cluster upgrade. A pause always ends
@@ -67,8 +72,9 @@ Not done: threading updates of one incident into a single Teams/Slack thread
 ## Stage 10 — Production hardening
 
 - Gateway: HA replicas, TLS, persistent audit sink, metrics (Prometheus).
-- GPU support and model selection guidance; OpenAI-compatible model servers
-  such as vLLM alongside Ollama (today the gateway speaks the Ollama API only).
+- GPU support and model selection guidance. (Hosted and OpenAI-compatible
+  models are done: [ai-providers.md](ai-providers.md).)
+- Azure OpenAI with Entra ID workload identity instead of an API key.
 - Better retrieval ranking (known nit: the wrong-port scenario ranks the
   missing-Service runbook first); `make kb-gaps` listing incidents diagnosed as
   `unknown` across namespaces, to show which runbooks to write next.

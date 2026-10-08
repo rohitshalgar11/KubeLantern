@@ -60,6 +60,7 @@ See [docs/helm-argocd.md](../../docs/helm-argocd.md) for the full ArgoCD setup.
 | `gateway.namespace` | `kubelantern-ai` | used by the egress NetworkPolicy |
 | `gateway.port` | `8080` | |
 | `gateway.tokenExpirationSeconds` | `3600` | projected token lifetime |
+| `gateway.timeoutSeconds` | `240` | how long the agent waits for one diagnosis (raise for large local models on CPU) |
 | `incidents.resolveAfterSeconds` | `300` | healthy window before RESOLVED |
 | `incidents.reminderMinutes` | `30` | ONGOING reminder interval |
 | `incidents.persist` | `true` | store incidents as `Incident` objects in this namespace (survive restarts, `kubectl get incidents`); `false` keeps them in memory |

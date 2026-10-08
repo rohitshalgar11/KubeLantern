@@ -1,6 +1,10 @@
 # KubeLantern platform — install once per cluster, into its own namespace
 # (default name used by the agent chart: kubelantern-ai).
 
+# Pull secrets for private registries, used by the gateway, Ollama and Qdrant
+# pods, e.g. [{name: my-registry}]. Not needed on AKS with the ACR attached.
+imagePullSecrets: []
+
 gateway:
   image:
     repository: ghcr.io/rohitshalgar11/kubelantern-gateway
@@ -33,8 +37,50 @@ gateway:
   tolerations: []
   affinity: {}
 
+# Which AI model diagnoses incidents. Default: the local Ollama below — nothing
+# leaves the cluster. With a hosted provider, the (redacted) incident evidence
+# and matching runbook text are sent to that provider. See docs/ai-providers.md.
+llm:
+  # ollama | openai | azure-openai | anthropic
+  #   openai also covers every OpenAI-compatible API (vLLM, LiteLLM, Groq,
+  #   Mistral, OpenRouter, Google Gemini's OpenAI endpoint, ...): set baseUrl.
+  provider: ollama
+  # Model name; empty = gateway.model. Azure OpenAI: your DEPLOYMENT name.
+  model: ""
+  # openai: empty = https://api.openai.com/v1, or the compatible API's URL.
+  # azure-openai: https://<resource>.openai.azure.com (required).
+  # anthropic: empty = https://api.anthropic.com.
+  baseUrl: ""
+  # azure-openai only; empty = 2024-10-21.
+  apiVersion: ""
+  # Secret in this namespace with key `api-key` (required for hosted providers).
+  # Mounted only into the gateway; re-read on every call, so rotation needs no restart.
+  existingSecret: ""
+  # Per model call; 0 = auto: 180 for ollama (slow on CPU), 60 for hosted models.
+  timeoutSeconds: 0
+  maxTokens: 1000
+  # Diagnoses in parallel; empty/0 = 1 for ollama, 4 for hosted providers.
+  maxConcurrency: 0
+  # With default-deny egress: the provider's IP ranges (empty = any HTTPS).
+  egressCidrs: []
+
+# Embedding model for runbook search. Default: Ollama's nomic-embed-text.
+# Anthropic has no embeddings API: keep ollama, or use openai / azure-openai.
+embeddings:
+  # ollama | openai | azure-openai
+  provider: ollama
+  # Model name; empty = gateway.embedModel. e.g. text-embedding-3-small;
+  # Azure OpenAI: your embeddings DEPLOYMENT name.
+  model: ""
+  # Empty = llm.baseUrl when the provider is the same as llm.provider.
+  baseUrl: ""
+  apiVersion: ""
+  # Empty = llm.existingSecret. Otherwise a Secret with key `api-key`.
+  existingSecret: ""
+
 ollama:
-  # false = use an existing Ollama at `externalUrl` (e.g. a GPU node pool).
+  # false = use an existing Ollama at `externalUrl` (e.g. a GPU node pool), or
+  # no Ollama at all when both llm and embeddings use a hosted provider.
   enabled: true
   externalUrl: ""
   image:
@@ -44,11 +90,44 @@ ollama:
     pullPolicy: IfNotPresent
   # Keep the model loaded (-1) to avoid cold starts.
   keepAlive: "-1"
+  # Where the downloaded models live (~1.3 GB default, ~6 GB with a 7b model).
+  # Without persistence they are downloaded again after every pod restart.
   persistence:
     enabled: true
+    # pvc            a PVC from a StorageClass (default): Azure Disk/Files, EBS, EFS,
+    #                Persistent Disk, Longhorn, Ceph, an NFS CSI class ... any cloud
+    # existingClaim  a PVC you created yourself (bound to any PV you like)
+    # nfs            an NFS export: mounted directly, or as a PV + PVC
+    #                (nfs.createPersistentVolume: true)
+    # hostPath       a directory on the node (single-node / dev clusters only)
+    # emptyDir       no persistence (models re-downloaded on restart); also when enabled: false
+    # custom         any Kubernetes volume source, written out under `custom`
+    type: pvc
     size: 8Gi
-    # Empty = cluster default StorageClass.
+    # type pvc: empty = the cluster's default StorageClass.
     storageClass: ""
+    # empty = ReadWriteOnce (pvc), ReadWriteMany (nfs).
+    accessModes: []
+    # PVC annotations (e.g. for backup tools).
+    annotations: {}
+    existingClaim: ""
+    nfs:
+      server: ""
+      path: ""
+      # false: the pod mounts the NFS export directly (no PV/PVC).
+      # true:  the chart creates a PersistentVolume (Retain) and a PVC bound to it.
+      createPersistentVolume: false
+      mountOptions: []          # e.g. [nfsvers=4.1, hard]
+    hostPath:
+      path: /var/lib/kubelantern/ollama
+      type: DirectoryOrCreate
+    emptyDir:
+      # Cap the node disk an emptyDir may use, e.g. 10Gi (empty = no limit).
+      sizeLimit: ""
+      medium: ""                # "Memory" = tmpfs (counts against memory!)
+    # type custom, e.g. Azure Files through the CSI driver:
+    #   csi: {driver: file.csi.azure.com, volumeAttributes: {secretName: azure-files, shareName: ollama}}
+    custom: {}
   resources:
     requests:
       cpu: 500m
@@ -66,10 +145,29 @@ qdrant:
     repository: qdrant/qdrant
     tag: v1.12.4
     pullPolicy: IfNotPresent
+  # Runbook vectors. They are rebuilt from the runbooks at start, so emptyDir
+  # (enabled: false) is fine; a volume only saves re-indexing time.
+  # Same options as ollama.persistence.
   persistence:
     enabled: true
+    type: pvc
     size: 2Gi
     storageClass: ""
+    accessModes: []
+    annotations: {}
+    existingClaim: ""
+    nfs:
+      server: ""
+      path: ""
+      createPersistentVolume: false
+      mountOptions: []
+    hostPath:
+      path: /var/lib/kubelantern/qdrant
+      type: DirectoryOrCreate
+    emptyDir:
+      sizeLimit: ""
+      medium: ""
+    custom: {}
   resources:
     requests:
       cpu: 50m

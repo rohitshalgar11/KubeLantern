@@ -311,7 +311,8 @@ def main(argv: list[str] | None = None) -> None:
     stop = threading.Event()
     if gateway_url:
         agent.diagnosis = DiagnosisWorker(
-            GatewayClient(gateway_url, token_path),
+            GatewayClient(gateway_url, token_path,
+                          timeout=_env_float("KUBELANTERN_GATEWAY_TIMEOUT_SECONDS", 240)),
             on_result=agent.on_diagnosis,
             on_error=agent.on_diagnosis_error,
         ).start()

@@ -143,6 +143,19 @@ spec:
         - port: 6333
           protocol: TCP
     {{- end }}
+    {{- if include "kubelantern-ai.hostedAI" . }}
+    # Hosted AI provider (llm / embeddings): HTTPS, limited to llm.egressCidrs if set.
+    - ports:
+        - port: 443
+          protocol: TCP
+      {{- with (.Values.llm | default dict).egressCidrs }}
+      to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
 {{- if .Values.ollama.enabled }}
 ---
 # Ollama: DNS, and HTTPS to the internet to download models (optional).

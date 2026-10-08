@@ -7,143 +7,452 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "repository": { "type": "string", "minLength": 1 },
-        "tag": { "type": "string" },
-        "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string"
+        },
+        "pullPolicy": {
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
       }
     },
     "persistence": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
-        "size": { "type": "string" },
-        "storageClass": { "type": "string" }
+        "enabled": {
+          "type": "boolean"
+        },
+        "type": {
+          "enum": [
+            "pvc",
+            "existingClaim",
+            "nfs",
+            "hostPath",
+            "emptyDir",
+            "custom"
+          ]
+        },
+        "size": {
+          "type": "string"
+        },
+        "storageClass": {
+          "type": "string"
+        },
+        "accessModes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "ReadWriteOnce",
+              "ReadWriteMany",
+              "ReadOnlyMany",
+              "ReadWriteOncePod"
+            ]
+          }
+        },
+        "annotations": {
+          "type": "object"
+        },
+        "existingClaim": {
+          "type": "string"
+        },
+        "nfs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "server": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "createPersistentVolume": {
+              "type": "boolean"
+            },
+            "mountOptions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "hostPath": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string"
+            }
+          }
+        },
+        "emptyDir": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sizeLimit": {
+              "type": "string"
+            },
+            "medium": {
+              "enum": [
+                "",
+                "Memory"
+              ]
+            }
+          }
+        },
+        "custom": {
+          "type": "object"
+        }
       }
     },
     "dns": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "namespace": { "type": "string" },
-        "podLabels": { "type": "object", "minProperties": 1 }
+        "namespace": {
+          "type": "string"
+        },
+        "podLabels": {
+          "type": "object",
+          "minProperties": 1
+        }
       }
     }
   },
   "properties": {
-    "global": { "type": "object" },
-    "enabled": { "type": "boolean" },
+    "global": {
+      "type": "object"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
     "gateway": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "image": { "$ref": "#/definitions/image" },
-        "model": { "type": "string", "minLength": 1 },
-        "embedModel": { "type": "string", "minLength": 1 },
-        "pullModels": { "type": "boolean" },
-        "audience": { "type": "string", "minLength": 1 },
-        "ratePerMinute": { "type": "number", "exclusiveMinimum": 0 },
-        "runbookMinScore": { "type": "number", "minimum": 0, "maximum": 1 },
-        "logLevel": { "enum": ["DEBUG", "INFO", "WARNING", "ERROR"] },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "resources": { "type": "object" },
-        "podAnnotations": { "type": "object" },
-        "nodeSelector": { "type": "object" },
-        "tolerations": { "type": "array" },
-        "affinity": { "type": "object" }
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "embedModel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pullModels": {
+          "type": "boolean"
+        },
+        "audience": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ratePerMinute": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "runbookMinScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "logLevel": {
+          "enum": [
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR"
+          ]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "resources": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object"
+        },
+        "nodeSelector": {
+          "type": "object"
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        }
       }
     },
     "ollama": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
-        "externalUrl": { "type": "string" },
-        "image": { "$ref": "#/definitions/image" },
-        "keepAlive": { "type": "string" },
-        "persistence": { "$ref": "#/definitions/persistence" },
-        "resources": { "type": "object" },
-        "nodeSelector": { "type": "object" },
-        "tolerations": { "type": "array" },
-        "affinity": { "type": "object" }
+        "enabled": {
+          "type": "boolean"
+        },
+        "externalUrl": {
+          "type": "string"
+        },
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "keepAlive": {
+          "type": "string"
+        },
+        "persistence": {
+          "$ref": "#/definitions/persistence"
+        },
+        "resources": {
+          "type": "object"
+        },
+        "nodeSelector": {
+          "type": "object"
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        }
       }
     },
     "qdrant": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
-        "image": { "$ref": "#/definitions/image" },
-        "persistence": { "$ref": "#/definitions/persistence" },
-        "resources": { "type": "object" },
-        "nodeSelector": { "type": "object" },
-        "tolerations": { "type": "array" },
-        "affinity": { "type": "object" }
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "persistence": {
+          "$ref": "#/definitions/persistence"
+        },
+        "resources": {
+          "type": "object"
+        },
+        "nodeSelector": {
+          "type": "object"
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        }
+      }
+    },
+    "llm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "enum": [
+            "ollama",
+            "openai",
+            "azure-openai",
+            "anthropic"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "baseUrl": {
+          "type": "string",
+          "pattern": "^$|^https?://"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "existingSecret": {
+          "type": "string"
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "maxTokens": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 32000
+        },
+        "maxConcurrency": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "egressCidrs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "embeddings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "enum": [
+            "ollama",
+            "openai",
+            "azure-openai"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "baseUrl": {
+          "type": "string",
+          "pattern": "^$|^https?://"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "existingSecret": {
+          "type": "string"
+        }
       }
     },
     "sharedRunbooks": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "builtin": { "type": "boolean" },
-        "exclude": { "type": "array", "items": { "type": "string" } },
+        "builtin": {
+          "type": "boolean"
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "extra": {
           "type": "object",
-          "propertyNames": { "pattern": "^[a-z0-9]([-a-z0-9.]{0,61}[a-z0-9])?$" },
-          "additionalProperties": { "type": "string", "maxLength": 16384 }
+          "propertyNames": {
+            "pattern": "^[a-z0-9]([-a-z0-9.]{0,61}[a-z0-9])?$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 16384
+          }
         },
         "existingConfigMaps": {
           "type": "array",
           "maxItems": 20,
-          "items": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9.]{0,60}[a-z0-9])?$" }
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9.]{0,60}[a-z0-9])?$"
+          }
         },
-        "reloadSeconds": { "type": "integer", "minimum": 0, "maximum": 3600 }
+        "reloadSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600
+        }
       }
     },
     "maintenance": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "paused": { "type": "boolean" },
-        "until": { "type": "string", "pattern": "^$|^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$" },
-        "reason": { "type": "string", "maxLength": 200 }
+        "paused": {
+          "type": "boolean"
+        },
+        "until": {
+          "type": "string",
+          "pattern": "^$|^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 200
+        }
       }
     },
     "crds": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "install": { "type": "boolean" },
-        "keep": { "type": "boolean" }
+        "install": {
+          "type": "boolean"
+        },
+        "keep": {
+          "type": "boolean"
+        }
       }
     },
     "agentNamespaceSelector": {
       "type": "object",
       "minProperties": 1,
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": {
+        "type": "string"
+      }
     },
     "networkPolicy": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
+        "enabled": {
+          "type": "boolean"
+        },
         "egress": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "dns": { "$ref": "#/definitions/dns" },
+            "enabled": {
+              "type": "boolean"
+            },
+            "dns": {
+              "$ref": "#/definitions/dns"
+            },
             "apiServer": {
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "cidrs": { "type": "array", "items": { "type": "string" } },
-                "ports": { "type": "array", "items": { "type": "integer" }, "minItems": 1 }
+                "cidrs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "ports": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "minItems": 1
+                }
               }
             },
-            "ollamaInternet": { "type": "boolean" }
+            "ollamaInternet": {
+              "type": "boolean"
+            }
           }
         }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object"
       }
     }
   }

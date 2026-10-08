@@ -78,15 +78,17 @@ def report(results: list[dict]) -> int:
 
 
 def main() -> None:
-    from gateway.knowledge import KnowledgeBase, OllamaEmbedder, QdrantStore
+    from gateway.knowledge import KnowledgeBase, QdrantStore
+    from gateway.providers import build_embedder, collection_name
 
     cases = json.load(sys.stdin)
     if not os.environ.get("QDRANT_URL"):
         sys.exit("QDRANT_URL is not set: runbook retrieval is off in this gateway")
+    model = os.environ.get("KUBELANTERN_EMBED_MODEL", "nomic-embed-text")
+    provider = os.environ.get("KUBELANTERN_EMBED_PROVIDER", "ollama").lower()
     kb = KnowledgeBase(
-        OllamaEmbedder(os.environ.get("OLLAMA_URL", "http://ollama:11434"),
-                       os.environ.get("KUBELANTERN_EMBED_MODEL", "nomic-embed-text")),
-        QdrantStore(os.environ["QDRANT_URL"]),
+        build_embedder(model, os.environ.get("OLLAMA_URL", "http://ollama:11434")),
+        QdrantStore(os.environ["QDRANT_URL"], collection=collection_name(provider, model)),
         min_score=float(os.environ.get("KUBELANTERN_RUNBOOK_MIN_SCORE", "0.35")),
     )
     sys.exit(report(check(kb, cases)))

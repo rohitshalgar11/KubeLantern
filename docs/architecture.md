@@ -131,6 +131,7 @@ The controlled AI boundary, in the platform-owned `kubelantern-ai` namespace.
 | `rules.py` | Deterministic classification, verified facts, fact-based fallbacks. |
 | `knowledge.py` | Runbook chunking, embeddings, Qdrant store, namespace-filtered retrieval, team runbook sync, shared runbooks read from mounted ConfigMaps and reloaded when they change. |
 | `server.py` / `adapters.py` | HTTP server (stdlib), Ollama client, Kubernetes TokenReview client. |
+| `providers.py` | Hosted models: Azure OpenAI, OpenAI and OpenAI-compatible APIs, Anthropic; their embeddings; API key from a mounted Secret ([ai-providers.md](ai-providers.md)). |
 
 The gateway's **only** Kubernetes permission is `system:auth-delegator`
 (TokenReview). It never reads cluster objects — agents push evidence and team

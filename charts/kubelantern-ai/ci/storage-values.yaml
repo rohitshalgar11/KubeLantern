@@ -1,0 +1,18 @@
+# Storage options: Ollama models on an NFS export (static PV + PVC),
+# Qdrant on a size-limited emptyDir, a private registry pull secret.
+imagePullSecrets:
+  - name: my-registry
+ollama:
+  persistence:
+    type: nfs
+    size: 20Gi
+    nfs:
+      server: nfs.example.internal
+      path: /exports/kubelantern/ollama
+      createPersistentVolume: true
+      mountOptions: [nfsvers=4.1, hard]
+qdrant:
+  persistence:
+    type: emptyDir
+    emptyDir:
+      sizeLimit: 2Gi

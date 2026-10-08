@@ -4,5 +4,5 @@
 *.bak
 *.tmp
 ci/
-# Windows download markers
+# Windows download markers (copied from Windows into WSL)
 *Zone.Identifier

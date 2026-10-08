@@ -102,19 +102,26 @@ def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=os.environ.get("KUBELANTERN_LOG_LEVEL", "INFO"),
                         format="%(asctime)s %(levelname)s %(name)s %(message)s", stream=sys.stderr)
 
-    llm = OllamaLLM(args.ollama_url, args.model)
+    from gateway.providers import build_embedder, build_llm, collection_name
+
+    llm_provider = os.environ.get("KUBELANTERN_LLM_PROVIDER", "ollama").lower()
+    embed_provider = os.environ.get("KUBELANTERN_EMBED_PROVIDER", "ollama").lower()
+    llm = build_llm(args.model, args.ollama_url)
     knowledge = None
     if args.qdrant_url:
-        from gateway.knowledge import KnowledgeBase, OllamaEmbedder, QdrantStore
+        from gateway.knowledge import KnowledgeBase, QdrantStore
 
-        knowledge = KnowledgeBase(OllamaEmbedder(args.ollama_url, args.embed_model),
-                                  QdrantStore(args.qdrant_url),
+        knowledge = KnowledgeBase(build_embedder(args.embed_model, args.ollama_url),
+                                  QdrantStore(args.qdrant_url,
+                                              collection=collection_name(embed_provider, args.embed_model)),
                                   min_score=float(os.environ.get("KUBELANTERN_RUNBOOK_MIN_SCORE", "0.35")))
     from kubelantern_common.maintenance import read_dir
 
     maintenance_dir = os.environ.get("KUBELANTERN_MAINTENANCE_DIR", "/etc/kubelantern/maintenance")
     gw = Gateway(
-        GatewayConfig(audience=args.audience, rate_per_minute=args.rate_per_minute),
+        GatewayConfig(audience=args.audience, rate_per_minute=args.rate_per_minute,
+                      # A local model handles one diagnosis at a time; a hosted one can do more.
+                      max_concurrency=int(os.environ.get("KUBELANTERN_MAX_CONCURRENCY", "1"))),
         Authenticator(KubeTokenReviewer(), args.audience),
         llm,
         knowledge=knowledge,
@@ -140,10 +147,12 @@ def main(argv: list[str] | None = None) -> None:
             time.sleep(15)
 
     def startup() -> None:
-        ensure_model(llm)
+        if llm_provider == "ollama":           # hosted models need nothing pulled
+            ensure_model(llm)
         if knowledge is None:
             return
-        ensure_model(OllamaLLM(args.ollama_url, args.embed_model))
+        if embed_provider == "ollama":
+            ensure_model(OllamaLLM(args.ollama_url, args.embed_model))
         while True:  # Qdrant may still be starting
             try:
                 knowledge.load_shared(args.shared_runbooks)
@@ -163,8 +172,9 @@ def main(argv: list[str] | None = None) -> None:
     threading.Thread(target=startup, name="startup", daemon=True).start()
 
     httpd = serve(gw, llm.ready, "0.0.0.0", args.port)
-    log.info("gateway listening on :%d model=%s ollama=%s runbooks=%s", args.port, args.model,
-             args.ollama_url, args.qdrant_url or "off")
+    log.info("gateway listening on :%d — model: %s/%s, embeddings: %s/%s, runbooks: %s", args.port,
+             llm_provider, args.model, embed_provider, args.embed_model,
+             "on" if args.qdrant_url else "off")
     httpd.serve_forever()
 
 

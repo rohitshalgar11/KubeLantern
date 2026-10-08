@@ -87,6 +87,12 @@ class Unavailable(GatewayError):
     status = 503
 
 
+class ProviderRejected(GatewayError):
+    """The hosted AI provider refused the request for a reason retrying won't
+    fix (bad key, no credit, unknown model). Not retried by agents."""
+    status = 424
+
+
 # -- authentication -------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -401,6 +407,9 @@ class Gateway:
             except GatewayError:
                 raise
             except Exception as e:
+                if getattr(e, "permanent", False):          # providers.ProviderError
+                    log.error("AI provider rejected the request: %s", e)
+                    raise ProviderRejected(f"AI provider: {e}") from e
                 log.exception("llm call failed")
                 raise Unavailable(f"model error: {type(e).__name__}",
                                   retry_after=self.config.busy_retry_after_seconds) from e

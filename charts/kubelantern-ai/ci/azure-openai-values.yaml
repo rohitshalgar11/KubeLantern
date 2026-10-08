@@ -1,0 +1,17 @@
+# Hosted models only: Azure OpenAI for chat and embeddings, no Ollama.
+llm:
+  provider: azure-openai
+  model: gpt-4o-mini                       # deployment name
+  baseUrl: https://contoso-ai.openai.azure.com
+  existingSecret: kubelantern-llm
+  egressCidrs: [20.0.0.0/8]
+embeddings:
+  provider: azure-openai
+  model: text-embedding-3-small            # deployment name
+gateway:
+  runbookMinScore: 0.3
+ollama:
+  enabled: false
+networkPolicy:
+  egress:
+    enabled: true

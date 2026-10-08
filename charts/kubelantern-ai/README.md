@@ -47,12 +47,15 @@ With ArgoCD, see [docs/helm-argocd.md](../../docs/helm-argocd.md). The CRDs carr
 | `ollama.enabled` | `true` | `false` = use `ollama.externalUrl` |
 | `ollama.externalUrl` | `""` | e.g. Ollama on a GPU node pool |
 | `ollama.image.tag` | `latest` | pin a version in production |
-| `ollama.persistence.size` | `8Gi` | model storage |
-| `ollama.persistence.storageClass` | `""` | cluster default |
 | `ollama.resources` | 500m/2Gi → 5Gi | |
 | `qdrant.enabled` | `true` | `false` = diagnoses without runbooks |
 | `qdrant.image.tag` | `v1.12.4` | |
-| `qdrant.persistence.size` | `2Gi` | |
+| `llm.provider` | `ollama` | `ollama`, `openai` (and any OpenAI-compatible API), `azure-openai`, `anthropic` — see [docs/ai-providers.md](../../docs/ai-providers.md) |
+| `llm.model` / `baseUrl` / `apiVersion` | `""` | model (Azure: deployment) name, endpoint, Azure API version |
+| `llm.existingSecret` | `""` | Secret with key `api-key` for a hosted provider; mounted only into the gateway |
+| `llm.timeoutSeconds` / `maxTokens` / `maxConcurrency` | `180` / `1000` / auto | per call; answer length; parallel diagnoses (1 local, 4 hosted) |
+| `llm.egressCidrs` | `[]` | restrict the gateway's HTTPS egress to the provider |
+| `embeddings.provider` / `model` / `baseUrl` / `existingSecret` | `ollama` | runbook search embeddings: `ollama`, `openai`, `azure-openai` |
 | `sharedRunbooks.builtin` | `true` | ship the built-in runbook library (ConfigMap `kubelantern-runbooks-builtin`) |
 | `sharedRunbooks.exclude` | `[]` | built-in runbooks to leave out, by name |
 | `sharedRunbooks.extra` | `{}` | your own shared runbooks inline: `<name>: <Markdown>`; same name as a built-in one replaces it |
@@ -61,6 +64,14 @@ With ArgoCD, see [docs/helm-argocd.md](../../docs/helm-argocd.md). The CRDs carr
 | `maintenance.paused` | `false` | cluster-wide maintenance: every agent opens no new incidents and sends no alerts (see [docs/maintenance.md](../../docs/maintenance.md)) |
 | `maintenance.until` | `""` | end time, RFC 3339 UTC (e.g. `2026-10-07T22:00:00Z`); recommended |
 | `maintenance.reason` | `""` | shown in agent logs |
+| `imagePullSecrets` | `[]` | pull secrets for the gateway, Ollama and Qdrant (private registries) |
+| `ollama.persistence.type` | `pvc` | where models live: `pvc`, `existingClaim`, `nfs`, `hostPath`, `emptyDir`, `custom` — see [docs/installation.md](../../docs/installation.md#43-storage-for-the-local-model) |
+| `ollama.persistence.size` / `storageClass` / `accessModes` | `8Gi` / default / RWO | for `pvc` (and the NFS PV) |
+| `ollama.persistence.existingClaim` | `""` | for `existingClaim` |
+| `ollama.persistence.nfs.*` | | `server`, `path`, `createPersistentVolume` (PV + PVC instead of a direct mount), `mountOptions` |
+| `ollama.persistence.emptyDir.sizeLimit` | `""` | cap node disk use without persistence |
+| `ollama.persistence.custom` | `{}` | any volume source (e.g. CSI inline) |
+| `qdrant.persistence.*` | `pvc`, `2Gi` | same options; `emptyDir` is fine (rebuilt from runbooks) |
 | `crds.install` | `true` | `false` if you manage CRDs separately |
 | `crds.keep` | `true` | keep CRDs (and teams' Runbooks) on uninstall |
 | `agentNamespaceSelector` | `{kubelantern.io/enabled: "true"}` | namespaces whose agents may call the gateway |

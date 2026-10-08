@@ -17,7 +17,7 @@ AGENT_IMAGE_ID = $(shell docker image inspect -f '{{.Id}}' $(IMAGE) 2>/dev/null 
         deploy-agent deploy-agents logs test-crashloop test-oom test-imagepull \
         test-failures clean-failures test-rbac up run-local \
         test-scale test-cause-change test-recover \
-        crds gateway-image ai-up ai-pull ai-status ai-logs ai-down test-gateway \
+        crds llm-key ai-provider ai-local gateway-image ai-up ai-pull ai-status ai-logs ai-down test-gateway \
         ai-model eval onboard-runbooks runbooks-demo test-rag \
         chart-lint egress-lockdown egress-unlock migrate-to-helm incidents test-incidents \
         notify-sink notify-sink-logs test-notify notify-off \
@@ -134,6 +134,24 @@ ai-logs: ## Follow gateway logs (audit + errors)
 ai-down: ## Remove the platform release and namespace (keeps agents and the Runbook CRD)
 	-$(HELM) uninstall kubelantern-ai -n $(AI_NS)
 	kubectl delete namespace $(AI_NS) --ignore-not-found
+
+llm-key: ## Store a hosted AI provider's API key in Secret kubelantern-llm (asks for it; not echoed)
+	@printf "API key: "; stty -echo 2>/dev/null; read KEY; stty echo 2>/dev/null; echo; \
+	  [ -n "$$KEY" ] || { echo "no key entered"; exit 1; }; \
+	  kubectl -n $(AI_NS) create secret generic kubelantern-llm --from-literal=api-key="$$KEY" \
+	    --dry-run=client -o yaml | kubectl apply -f - >/dev/null && echo "Secret $(AI_NS)/kubelantern-llm saved."
+
+PROVIDER ?= openai
+BASE_URL ?=
+ai-provider: ## Diagnose with a hosted model (PROVIDER=openai|azure-openai|anthropic MODEL=… [BASE_URL=…]); run llm-key first
+	@if [ "$(origin MODEL)" = "file" ]; then echo "set MODEL, e.g. MODEL=gpt-4o-mini (Azure: your deployment name)"; exit 1; fi
+	$(HELM) upgrade kubelantern-ai charts/kubelantern-ai -n $(AI_NS) --reuse-values \
+	  --set llm.provider=$(PROVIDER) --set-string llm.model=$(MODEL) --set-string llm.baseUrl=$(BASE_URL) \
+	  --set llm.existingSecret=kubelantern-llm --wait --timeout 10m
+
+ai-local: ## Back to the local Ollama model for diagnoses
+	$(HELM) upgrade kubelantern-ai charts/kubelantern-ai -n $(AI_NS) --reuse-values \
+	  --set llm.provider=ollama --set-string llm.model= --wait --timeout 30m
 
 ai-model: ## Switch the gateway to another model (MODEL=qwen2.5:3b); pulls it if needed
 	$(HELM) upgrade kubelantern-ai charts/kubelantern-ai -n $(AI_NS) \

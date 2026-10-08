@@ -1,0 +1,68 @@
+# KubeLantern platform via ArgoCD, diagnosing with Azure OpenAI instead of the
+# local Ollama. The API key comes from Azure Key Vault through External Secrets;
+# nothing secret is in Git. See docs/ai-providers.md.
+#
+# Before syncing: in Azure, deploy a chat model (e.g. gpt-4o-mini) and, if you
+# want hosted runbook search too, an embeddings model (text-embedding-3-small)
+# in your Azure OpenAI resource, and store its key in Key Vault as
+# "kubelantern-azure-openai-key".
+---
+apiVersion: external-secrets.io/v1          # v1beta1 on older ESO versions
+kind: ExternalSecret
+metadata:
+  name: kubelantern-llm
+  namespace: kubelantern-ai
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: azure-keyvault                    # your store
+  target:
+    name: kubelantern-llm                   # = llm.existingSecret
+  data:
+    - secretKey: api-key                    # the key the gateway reads
+      remoteRef:
+        key: kubelantern-azure-openai-key   # Key Vault secret name
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubelantern-ai
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: ghcr.io/rohitshalgar11/charts
+    chart: kubelantern-ai
+    targetRevision: 0.2.0
+    helm:
+      valuesObject:
+        llm:
+          provider: azure-openai
+          model: gpt-4o-mini                          # your DEPLOYMENT name
+          baseUrl: https://<resource>.openai.azure.com
+          existingSecret: kubelantern-llm
+          # egressCidrs: [10.20.30.0/24]             # private endpoint subnet (default-deny egress)
+        embeddings:
+          provider: azure-openai
+          model: text-embedding-3-small               # your embeddings DEPLOYMENT name
+        gateway:
+          runbookMinScore: 0.3                        # tuned for OpenAI embeddings; check with make kb-check
+        ollama:
+          enabled: false                              # no local model needed
+        qdrant:
+          persistence:
+            enabled: false                            # runbook index is rebuilt at start
+        networkPolicy:
+          egress:
+            enabled: true                             # if kubelantern-ai is default-deny egress
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kubelantern-ai
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

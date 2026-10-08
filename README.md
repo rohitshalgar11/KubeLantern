@@ -146,8 +146,10 @@ flowchart LR
   and application failures (Java, Python, Node.js, Go, .NET, databases, TLS,
   DNS). Your platform team adds its own as ConfigMaps from Git, picked up live:
   no image rebuild.
-- **Private by default.** The model runs in-cluster (Ollama). Nothing leaves
-  unless a team turns on notifications for its own Teams or Slack channel.
+- **Private by default, any model you like.** The default model runs in-cluster
+  (Ollama), so nothing leaves. Prefer a hosted one? Azure OpenAI, OpenAI,
+  Anthropic or any OpenAI-compatible API (vLLM, LiteLLM, Gemini, Groq, …) work
+  with an API key — the isolation and validation stay the same.
 - **Small model, reliable answers.** Rules, verified facts and validation
   around the model — it cannot override a confident category.
 - **Quiet.** One incident and one model call per real problem, not per restart;
@@ -179,6 +181,8 @@ Full guide: [docs/getting-started.md](docs/getting-started.md).
 ### Install on your cluster (Helm / ArgoCD)
 
 Two charts: the **platform** once per cluster, the **agent** once per team namespace.
+Step by step, including building the images and choosing storage:
+[docs/installation.md](docs/installation.md).
 
 ```bash
 helm install kubelantern-ai oci://ghcr.io/rohitshalgar11/charts/kubelantern-ai \
@@ -191,6 +195,23 @@ kubectl label namespace payments kubelantern.io/enabled=true
 With ArgoCD, deploy the agent as its own Application or as a dependency of one of
 your charts, with optional egress rules for default-deny-egress namespaces:
 [docs/helm-argocd.md](docs/helm-argocd.md).
+
+### Use a hosted model instead (optional)
+
+Diagnose with Azure OpenAI, OpenAI, Anthropic, Gemini or any OpenAI-compatible
+API — no Ollama needed. Store the API key, then set the provider:
+
+```bash
+kubectl -n kubelantern-ai create secret generic kubelantern-llm --from-literal=api-key='…'
+
+helm upgrade kubelantern-ai oci://ghcr.io/rohitshalgar11/charts/kubelantern-ai -n kubelantern-ai \
+  --reuse-values --set llm.provider=azure-openai --set llm.model=<deployment> \
+  --set llm.baseUrl=https://<resource>.openai.azure.com --set llm.existingSecret=kubelantern-llm
+```
+
+Locally on kind: `make llm-key` then `make ai-provider PROVIDER=openai MODEL=gpt-4o-mini`.
+Providers, models, keys, ArgoCD and per-environment setups:
+[docs/ai-providers.md](docs/ai-providers.md).
 
 ## Verified, not just claimed
 
@@ -205,13 +226,14 @@ your charts, with optional egress rules for default-deny-egress namespaces:
 | `make test-kb` | shared runbooks load from ConfigMaps, reload live, override, removal; right runbook for known failures | 7/7 ✅, 48/48 found |
 | `make test-gateway` | token audience, identity, namespace stamping, NetworkPolicy | 8/8 ✅ |
 | `make test-rag` | a private payments runbook never reaches demo | 8/8 ✅ |
-| `make eval` | diagnosis quality on 9 scenarios via the real gateway | 9/9 ✅ |
+| `make eval` | diagnosis quality on 9 scenarios via the real gateway | 9/9 ✅ local and hosted (Gemini) |
 
 ## Documentation
 
 | | |
 |---|---|
 | [Getting started](docs/getting-started.md) | local install on kind, demo, configuration, troubleshooting |
+| [Installation guide](docs/installation.md) | step by step on a real cluster: build images, values, storage, install, verify, upgrade |
 | [Helm & ArgoCD](docs/helm-argocd.md) | charts, GitOps, using the agent as a chart dependency, default-deny egress, registries |
 | [Architecture](docs/architecture.md) | components, end-to-end flow, trust boundaries |
 | [How diagnosis works](docs/diagnosis.md) | detection, incidents, evidence, the graph, evaluation |
@@ -220,6 +242,7 @@ your charts, with optional egress rules for default-deny-egress namespaces:
 | [Comparison](docs/comparison.md) | KubeLantern vs K8sGPT, HolmesGPT, kagent |
 | [Build journey](docs/journey.md) | the ten stages, and what went wrong along the way |
 | [Notifications](docs/notifications.md) | Microsoft Teams (Workflows or channel email), Slack, webhook; per-namespace, Secret isolation |
+| [AI providers](docs/ai-providers.md) | local Ollama (default), Azure OpenAI, OpenAI, Anthropic, any OpenAI-compatible API |
 | [Maintenance mode](docs/maintenance.md) | pause incidents and alerts during cluster upgrades |
 | [Roadmap](docs/roadmap.md) | production hardening |
 

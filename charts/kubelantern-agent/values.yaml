@@ -23,6 +23,8 @@ gateway:
   port: 8080
   # Lifetime of the projected token the agent presents to the gateway.
   tokenExpirationSeconds: 3600
+  # How long the agent waits for one diagnosis. Raise it for big local models on CPU.
+  timeoutSeconds: 240
 
 incidents:
   # A failing workload must stay healthy this long before RESOLVED.

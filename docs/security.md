@@ -173,6 +173,7 @@ No app team and no agent receives a ClusterRole. Teams manage runbooks through a
 | Noisy tenant starves others | per-namespace rate limit, single model slot, bounded queues |
 | Webhook URL stolen from the agent | not mounted in the agent container; only the notifier sidecar reads it |
 | Someone silences alerts to hide a problem | the cluster-wide switch is only in the `kubelantern-ai` release (platform team); every pause ends (`until` or `maxHours`) and is logged by each agent |
+| Incident data sent to a hosted AI provider | local model by default; a hosted provider is an explicit platform choice; evidence redacted twice; the key is mounted only into the gateway; agents never reach the provider |
 | Incident data leaks to chat | notifications off by default, per namespace; summary detail (no logs) by default; redacted |
 
 To report a vulnerability, see [SECURITY.md](../SECURITY.md).

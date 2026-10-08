@@ -1,24 +1,6 @@
 {{- if .Values.ollama.enabled }}
 {{- $o := .Values.ollama }}
-{{- if $o.persistence.enabled }}
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: ollama-models
-  namespace: {{ .Release.Namespace }}
-  labels:
-    app.kubernetes.io/name: ollama
-    {{- include "kubelantern-ai.labels" . | nindent 4 }}
-spec:
-  accessModes: ["ReadWriteOnce"]
-  {{- with $o.persistence.storageClass }}
-  storageClassName: {{ . | quote }}
-  {{- end }}
-  resources:
-    requests:
-      storage: {{ $o.persistence.size }}
----
-{{- end }}
+{{- include "kubelantern-ai.storageObjects" (dict "root" $ "p" $o.persistence "name" "ollama-models" "component" "ollama") }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,6 +22,10 @@ spec:
         app.kubernetes.io/name: ollama
         {{- include "kubelantern-ai.labels" . | nindent 8 }}
     spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: ollama
           image: {{ $o.image.repository }}:{{ $o.image.tag }}
@@ -66,12 +52,7 @@ spec:
               mountPath: /root/.ollama
       volumes:
         - name: models
-          {{- if $o.persistence.enabled }}
-          persistentVolumeClaim:
-            claimName: ollama-models
-          {{- else }}
-          emptyDir: {}
-          {{- end }}
+          {{- include "kubelantern-ai.volumeSource" (dict "root" $ "p" $o.persistence "name" "ollama-models" "component" "ollama") | nindent 10 }}
       {{- with $o.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

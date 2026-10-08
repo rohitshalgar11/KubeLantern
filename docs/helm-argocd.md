@@ -41,6 +41,9 @@ ghcr.io/rohitshalgar11/kubelantern-agent:<version>
 
 ## 1. Plain Helm
 
+A complete walk-through (images, values, storage, verification, upgrades) is in
+[installation.md](installation.md); this section is the short version.
+
 ```bash
 # Platform, once
 helm install kubelantern-ai oci://ghcr.io/rohitshalgar11/charts/kubelantern-ai \
@@ -135,6 +138,12 @@ syncs before the platform doesn't fail; it simply retries.
 
 **Uninstall safety.** The CRD has `helm.sh/resource-policy: keep` (value
 `crds.keep`). Removing the platform app doesn't delete the teams' runbooks.
+
+**Choosing the AI model.** The `valuesObject` above uses the local Ollama. To
+diagnose with Azure OpenAI, OpenAI, Anthropic or any OpenAI-compatible API, add
+`llm.*` values and an API key Secret (e.g. from Key Vault through External
+Secrets): [ai-providers.md](ai-providers.md#on-a-real-cluster-updating-the-chart)
+and [examples/argocd/ai-application-azure-openai.yaml](../examples/argocd/ai-application-azure-openai.yaml).
 
 ### 2.2 The agent as a dependency of another chart
 
@@ -346,8 +355,10 @@ Details: [runbooks.md](runbooks.md#shared-runbooks).
 ## 5. Secrets in GitOps (notifications)
 
 KubeLantern itself needs **no Secrets**: the agent's tokens are projected by
-the kubelet. Only notifications need one, because a Teams/Slack/webhook URL is
-a credential: anyone holding it can post into your channel. In GitOps everything
+the kubelet. Only two optional features need one: notifications (a
+Teams/Slack/webhook URL is a credential: anyone holding it can post into your
+channel), and a hosted AI model (an API key in `kubelantern-ai`, see
+[ai-providers.md](ai-providers.md)). The same tools below work for both. In GitOps everything
 comes from Git, and credentials must not be committed in plain text. So each
 organisation uses a tool that delivers secrets into the cluster safely.
 KubeLantern doesn't pick one: the chart references an **existing Secret by

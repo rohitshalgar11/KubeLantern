@@ -1,4 +1,32 @@
 {{- $gw := .Values.gateway }}
+{{- $llm := .Values.llm | default dict }}
+{{- $emb := .Values.embeddings | default dict }}
+{{- $llmProvider := $llm.provider | default "ollama" }}
+{{- $embProvider := $emb.provider | default "ollama" }}
+{{- /* embeddings from the same provider inherit its endpoint and API version */}}
+{{- $embBase := $emb.baseUrl | default "" }}
+{{- $embVersion := $emb.apiVersion | default "" }}
+{{- if eq $embProvider $llmProvider }}
+{{- $embBase = $embBase | default ($llm.baseUrl | default "") }}
+{{- $embVersion = $embVersion | default ($llm.apiVersion | default "") }}
+{{- end }}
+{{- $embKeyFile := "/etc/kubelantern/llm/api-key" }}
+{{- if $emb.existingSecret }}{{ $embKeyFile = "/etc/kubelantern/embeddings/api-key" }}{{ end }}
+{{- $concurrency := 4 }}
+{{- $timeout := 60 }}
+{{- if eq $llmProvider "ollama" }}{{ $concurrency = 1 }}{{ $timeout = 180 }}{{ end }}
+{{- if ne $llmProvider "ollama" }}
+{{- $_ := required "llm.existingSecret is required for a hosted model (a Secret with key api-key)" $llm.existingSecret }}
+{{- if and (eq $llmProvider "azure-openai") (not $llm.baseUrl) }}
+{{- fail "llm.baseUrl is required for azure-openai (https://<resource>.openai.azure.com)" }}
+{{- end }}
+{{- end }}
+{{- if and (ne $embProvider "ollama") (not (or $emb.existingSecret $llm.existingSecret)) }}
+{{- fail "embeddings.existingSecret (or llm.existingSecret) is required for hosted embeddings" }}
+{{- end }}
+{{- if and (eq $embProvider "azure-openai") (not $embBase) }}
+{{- fail "embeddings.baseUrl is required for azure-openai embeddings" }}
+{{- end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -51,6 +79,10 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: kubelantern-gateway
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       volumes:
         # Cluster-wide maintenance switch. Mounted (not read via the API), so the
         # gateway needs no extra RBAC; the kubelet refreshes it within ~1 minute.
@@ -58,6 +90,21 @@ spec:
           configMap:
             name: kubelantern-maintenance
             optional: true
+        {{- if $llm.existingSecret }}
+        # API key for the hosted AI provider: mounted only into the gateway.
+        - name: llm-key
+          secret:
+            secretName: {{ $llm.existingSecret }}
+            # Missing Secret: the pod still starts and /readyz says "API key missing".
+            optional: true
+        {{- end }}
+        {{- if $emb.existingSecret }}
+        - name: embeddings-key
+          secret:
+            secretName: {{ $emb.existingSecret }}
+            # Missing Secret: the pod still starts and /readyz says "API key missing".
+            optional: true
+        {{- end }}
         {{- $sr := .Values.sharedRunbooks | default dict }}
         # Shared runbooks, one folder per ConfigMap (later folders override earlier
         # ones with the same runbook name). Re-read every `reloadSeconds`.
@@ -95,9 +142,31 @@ spec:
             - name: OLLAMA_URL
               value: {{ include "kubelantern-ai.ollamaUrl" . | quote }}
             - name: KUBELANTERN_MODEL
-              value: {{ $gw.model | quote }}
+              value: {{ $llm.model | default $gw.model | quote }}
             - name: KUBELANTERN_EMBED_MODEL
-              value: {{ $gw.embedModel | quote }}
+              value: {{ $emb.model | default $gw.embedModel | quote }}
+            - name: KUBELANTERN_LLM_PROVIDER
+              value: {{ $llmProvider | quote }}
+            - name: KUBELANTERN_LLM_BASE_URL
+              value: {{ $llm.baseUrl | default "" | quote }}
+            - name: KUBELANTERN_LLM_API_VERSION
+              value: {{ $llm.apiVersion | default "" | quote }}
+            - name: KUBELANTERN_LLM_KEY_FILE
+              value: /etc/kubelantern/llm/api-key
+            - name: KUBELANTERN_LLM_TIMEOUT_SECONDS
+              value: {{ $llm.timeoutSeconds | default $timeout | quote }}
+            - name: KUBELANTERN_LLM_MAX_TOKENS
+              value: {{ $llm.maxTokens | default 1000 | quote }}
+            - name: KUBELANTERN_MAX_CONCURRENCY
+              value: {{ $llm.maxConcurrency | default $concurrency | quote }}
+            - name: KUBELANTERN_EMBED_PROVIDER
+              value: {{ $embProvider | quote }}
+            - name: KUBELANTERN_EMBED_BASE_URL
+              value: {{ $embBase | quote }}
+            - name: KUBELANTERN_EMBED_API_VERSION
+              value: {{ $embVersion | quote }}
+            - name: KUBELANTERN_EMBED_KEY_FILE
+              value: {{ $embKeyFile }}
             - name: KUBELANTERN_PULL_MODEL
               value: {{ $gw.pullModels | toString | quote }}
             - name: KUBELANTERN_AUDIENCE
@@ -122,6 +191,16 @@ spec:
             - name: maintenance
               mountPath: /etc/kubelantern/maintenance
               readOnly: true
+            {{- if $llm.existingSecret }}
+            - name: llm-key
+              mountPath: /etc/kubelantern/llm
+              readOnly: true
+            {{- end }}
+            {{- if $emb.existingSecret }}
+            - name: embeddings-key
+              mountPath: /etc/kubelantern/embeddings
+              readOnly: true
+            {{- end }}
             {{- if $sr.builtin }}
             - name: runbooks-builtin
               mountPath: /etc/kubelantern/runbooks/00-builtin

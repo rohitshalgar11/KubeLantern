@@ -83,6 +83,8 @@ spec:
             - name: KUBELANTERN_MAINTENANCE_POLL_SECONDS
               value: {{ .pollSeconds | default 30 | quote }}
             {{- end }}
+            - name: KUBELANTERN_GATEWAY_TIMEOUT_SECONDS
+              value: {{ .Values.gateway.timeoutSeconds | default 240 | quote }}
             - name: KUBELANTERN_GATEWAY_URL
               value: {{ .Values.gateway.url | quote }}
             - name: KUBELANTERN_TOKEN_PATH

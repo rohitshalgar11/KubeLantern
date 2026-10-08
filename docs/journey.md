@@ -229,6 +229,22 @@ The first live run still missed a one-line log ("FATAL: sorry, too many clients
 already"): a Symptoms section listing five different errors was embedded as one
 averaged vector. Each Symptoms line is now also indexed on its own.
 
+**Any AI model:** the gateway already talked to the model through one small
+interface, so hosted providers were an adapter each: OpenAI Chat Completions
+(which also covers vLLM, LiteLLM, Gemini, Groq and most others), Azure OpenAI
+(deployment URL, `api-key` header) and Anthropic (JSON forced through a tool).
+The diagnosis graph, rules and validation didn't change. OpenAI-compatible
+servers differ in small ways (no JSON-schema mode, `max_completion_tokens`, no
+`temperature`), so the client adapts once when a server rejects a parameter.
+
+**Verified live** with Google Gemini through the `openai` provider: `make eval`
+9/9 in 2–10 s per diagnosis (local qwen2.5:1.5b on CPU: 33–41 s), one attempt
+each. The live run also found three things unit tests couldn't: an account
+without API credit answers `429 insufficient_quota` (now reported at once
+instead of retried as a rate limit), Google wraps errors in a list, and an
+overloaded free tier holds requests open (hosted calls now time out after 60 s
+instead of the 180 s meant for a CPU model).
+
 **Verified:** `make test-notify` 10/10 (Teams card diagnosed and resolved,
 Slack, webhook, email to a Teams channel address; the agent can't read the
 webhook URLs and the notifier has no API token); `make test-maintenance` 9/9;
